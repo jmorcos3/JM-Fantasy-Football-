@@ -33,6 +33,7 @@ page of decisions: optimal lineup, waiver targets with FAAB bids, trade offers, 
 ## League-specific rules (per league in `config.json`)
 
 - `victory_points`: `{win, top3, top6}`. Standings, playoff odds and the weekly outlook use VP instead of record.
+- `min_partner_playoff_odds`: teams below this playoff probability are excluded as trade partners.
 - `low_score_rule`: `{threshold, penalty_pts}`. Shows each player's chance of scoring at or below the threshold and
   docks that risk from lineup choices (`penalty_pts` = how many points one dud costs you).
 

@@ -206,7 +206,7 @@ def positional(m, me, wv):
     return out
 
 
-def trades(m, me, needs=(), top=8):
+def trades(m, me, needs=(), top=8, skip=()):
     need = {n["pos"]: n for n in needs}
     mine = m.active(me)
     my_base = m.team_value(mine)
@@ -214,7 +214,7 @@ def trades(m, me, needs=(), top=8):
     best_fa = sorted((p for p in m.free if m.pos(p) in SKILL), key=lambda p: -m.value(p))[:3]
     ideas = []
     for t in m.lg["teams"]:
-        if t["id"] == me["id"]:
+        if t["id"] == me["id"] or t["id"] in skip:
             continue
         theirs = m.active(t)
         t_base = m.team_value(theirs)
@@ -257,9 +257,9 @@ def trades(m, me, needs=(), top=8):
     return sorted(ideas, key=lambda f: -f["score"])[:top]
 
 
-def buy_sell(m, me):
+def buy_sell(m, me, skip=()):
     """Projection vs recent production gaps. Buy = others' players producing below their outlook."""
-    owner = {p: t["name"] for t in m.lg["teams"] for p in t["players"]}
+    owner = {p: t["name"] for t in m.lg["teams"] if t["id"] not in skip for p in t["players"]}
     buy, sell = [], []
     for pid, who in owner.items():
         if m.pos(pid) not in SKILL or m.recent_gp.get(pid, 0) < 2 or len(m.weeks) < 2:
@@ -314,7 +314,10 @@ def build(m, trending, current_starters, sm):
     if not me:
         return {"error": "Could not find your team in this league."}
     opp = next((t for t in m.lg["teams"] if t["id"] == m.lg["opponents"].get(me["id"])), None)
-    buy, sell = buy_sell(m, me)
+    # leagues where teams out of the playoff race are off limits as trade partners
+    floor = m.lg["rules"].get("min_partner_playoff_odds")
+    skip = {i for i, o in sm["odds"].items() if floor and o < floor}
+    buy, sell = buy_sell(m, me, skip)
     needs = positional(m, me, waivers(m, me, trending, opp, top=60))
     dl = m.lg.get("trade_deadline")
     return {
@@ -323,7 +326,7 @@ def build(m, trending, current_starters, sm):
         "deadline": dl if dl and 0 < dl < 99 else None, "trades_open": not dl or dl >= m.week or dl >= 99,
         "matchup": matchup(m, me, opp), "lineup": lineup_advice(m, me, current_starters),
         "moves": (mv := move_plan(m, me, trending, opp)),
-        "waivers": [r for r in waivers(m, me, trending, opp, top=12 + len(mv)) if r["id"] not in {x["id"] for x in mv}][:10], "trades": trades(m, me, needs), "needs": needs, "buy": buy, "sell": sell,
+        "waivers": [r for r in waivers(m, me, trending, opp, top=12 + len(mv)) if r["id"] not in {x["id"] for x in mv}][:10], "trades": trades(m, me, needs, skip=skip), "needs": needs, "buy": buy, "sell": sell,
         "power": power(m, sm), "breakouts": breakouts(m, me),
         "playoff_odds": round(sm["odds"][me["id"]], 2), "seed": round(sm["seed"][me["id"]], 1), "playoff_teams": m.lg["playoff_teams"],
         "playoff_start": m.lg["playoff_start"], "playoff_weight": round(m.week_w.get(m.lg["playoff_start"], 1.0), 2), "week_sim": sm["week"],

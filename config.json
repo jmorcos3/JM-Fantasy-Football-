@@ -12,7 +12,8 @@
       "low_score_rule": {
         "threshold": 1,
         "penalty_pts": 4
-      }
+      },
+      "min_partner_playoff_odds": 0.1
     },
     {
       "platform": "espn",
