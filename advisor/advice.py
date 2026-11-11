@@ -116,10 +116,16 @@ def waivers(m, me, trending, opp=None, top=12):
         out.append(card(m, fa, d_ros=round(d_ros, 1), d_wk=round(d_wk, 1), bid=bid, hot=fa in hot, want=want,
                         rival=rival, rival_bid=rival_bid if m.lg["faab"] else None, outbid=outbid,
                         block=block if block >= 2 else None,
-                        drop=m.name(best_drop) if best_drop else None,
+                        drop=m.name(best_drop) if best_drop else None, drop_id=best_drop,
+                        drop_ppg=round(m.ppg(best_drop), 1) if best_drop else None,
                         kind="Season upgrade" if d_ros >= 5 else ("Streamer" if d_wk >= 0.5 else "Depth")))
     pen = (m.lg["rules"].get("low_score_rule") or {}).get("penalty_pts", 0)
-    out.sort(key=lambda r: -(r["d_ros"] + 0.5 * r["d_wk"] - pen * (r["bust"] or 0)))
+    def rank(r):
+        if r["pos"] in ("K", "DEF"):  # streamable positions: this week matters most
+            return r["d_wk"] + 0.3 * r["d_ros"] - pen * (r["bust"] or 0)
+        return r["d_ros"] + 0.5 * r["d_wk"] - pen * (r["bust"] or 0)
+
+    out.sort(key=lambda r: -rank(r))
     keep, n = [], {}
     for r in out:
         n[r["pos"]] = n.get(r["pos"], 0) + 1
@@ -129,6 +135,44 @@ def waivers(m, me, trending, opp=None, top=12):
 
 
 ELIG_POS = ("QB", "RB", "WR", "TE", "K", "DEF")
+
+
+def move_plan(m, me, trending, opp, max_moves=4):
+    """The actual claims to put in, in priority order. Each move is chosen after applying the ones
+    before it, so the list is a consistent set of adds and drops rather than overlapping alternatives."""
+    pen = (m.lg["rules"].get("low_score_rule") or {}).get("penalty_pts", 0)
+    team, free0, moves = dict(me, players=list(me["players"])), list(m.free), []
+    try:
+        for _ in range(max_moves):
+            rows = [r for r in waivers(m, team, trending, opp, top=30)
+                    if (r["d_wk"] - pen * (r["bust"] or 0) * (r["d_wk"] > 0) >= 1.5 or r["d_ros"] >= 4)
+                    and not (r["pos"] in ("K", "DEF") and r["pos"] in {x["pos"] for x in moves})]  # one streamer per spot
+            if not rows:
+                break
+            r = rows[0]
+            slots, _ = m.lineup(m.active(team), m.week)
+            hole = next((s for s, p, pts in slots if r["pos"] in ELIG[s] and len(ELIG[s]) == 1 and pts <= 0), None)
+            why = []
+            if hole:
+                why.append(f"your {hole} slot scores nothing this week without him")
+            if r["d_wk"] >= 0.5:
+                why.append(f"+{r['d_wk']} pts this week")
+            if r["d_ros"] >= 0.5:
+                why.append(f"+{r['d_ros']} pts over the rest of the season")
+            if r.get("block"):
+                why.append("keeps him away from this week's opponent")
+            r["why"] = "; ".join(why)
+            r["starts"] = r["d_wk"] >= 0.5
+            if r["drop_id"]:
+                d = r["drop_id"]
+                gone = "on bye and not needed" if m.proj[m.week].get(d, 0) <= 0 and m.ppg(d) > 0 else "least useful roster spot"
+                r["drop_why"] = f"{gone}; projects {r['drop_ppg']}/gm from here"
+            moves.append(r)
+            team["players"] = [p for p in team["players"] if p != r["drop_id"]] + [r["id"]]
+            m.free = [p for p in m.free if p != r["id"]]
+    finally:
+        m.free = free0
+    return moves
 
 
 def trades(m, me, top=8):
@@ -235,7 +279,8 @@ def build(m, trending, current_starters, sm):
         "faab": me["faab_left"] if m.lg["faab"] else None, "week": m.week,
         "deadline": dl if dl and 0 < dl < 99 else None, "trades_open": not dl or dl >= m.week or dl >= 99,
         "matchup": matchup(m, me, opp), "lineup": lineup_advice(m, me, current_starters),
-        "waivers": waivers(m, me, trending, opp), "trades": trades(m, me), "buy": buy, "sell": sell,
+        "moves": (mv := move_plan(m, me, trending, opp)),
+        "waivers": [r for r in waivers(m, me, trending, opp, top=12 + len(mv)) if r["id"] not in {x["id"] for x in mv}][:10], "trades": trades(m, me), "buy": buy, "sell": sell,
         "power": power(m, sm), "breakouts": breakouts(m, me),
         "playoff_odds": round(sm["odds"][me["id"]], 2), "seed": round(sm["seed"][me["id"]], 1), "playoff_teams": m.lg["playoff_teams"],
         "playoff_start": m.lg["playoff_start"], "playoff_weight": round(m.week_w.get(m.lg["playoff_start"], 1.0), 2), "week_sim": sm["week"],

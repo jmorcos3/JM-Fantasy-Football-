@@ -44,6 +44,14 @@ footer{color:var(--muted);font-size:12px;max-width:70ch}
 details.notes{color:var(--muted);font-size:12px}details.notes summary{cursor:pointer}details.notes li{margin-top:4px}
 .bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:8px;margin-block:-8px}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.step{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:start;background:var(--panel);border:1px solid var(--accent);border-radius:10px;padding:12px 14px}
+.num{font:600 15px var(--display);width:26px;height:26px;border-radius:50%;background:var(--accent);color:var(--bg);display:grid;place-items:center}
+.step .body{display:flex;flex-direction:column;gap:8px;min-width:0}
+.mv{display:grid;grid-template-columns:44px minmax(0,1fr);gap:8px;align-items:baseline}
+.verb{font:600 11px var(--body);text-transform:uppercase;letter-spacing:.06em}
+.add .verb{color:var(--good)}.drop .verb{color:var(--bad)}
+.bidbox{text-align:right}.bidbox .lab{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}.bidbox b{font:600 19px var(--display)}
 .note{font-weight:400;font-size:12px;padding:8px 12px}
 /* phone: every table row becomes a card, so no decision column is ever off-screen */
 @media (max-width:680px){
@@ -98,7 +106,7 @@ MAIN = {"Player", "Team", "Buy low", "Sell high"}
 WIDE = {"Action", "Owner"}
 KEY = {"Proj", "Bid", "Playoff odds", "Outlook / gm", "Shift", "Snap share"}
 HIDE = {"Slot", "#"}
-HALF = {"Game", "Competition", "Drop", "Status"}
+HALF = {"Game", "Competition", "Would replace", "Status"}
 
 
 def table(head, rows, cls=None):
@@ -144,6 +152,21 @@ def league(L, i):
     h.append('<div class="kpis">' + "".join(f'<div class="kpi"><b>{v}</b><span>{l}</span></div>' for v, l in k) + "</div>")
 
     br = L.get("bust_rule")
+    steps = []
+    for n, r in enumerate(L.get("moves") or [], 1):
+        bid = f'<span class="lab">Bid</span><b>${r["bid"]}</b>' if r["bid"] is not None else '<span class="lab">Claim</span><b>#{}</b>'.format(n)
+        risk = f' <span class="pill b">{round(r["bust"] * 100)}% chance of ≤{br["threshold"]}</span>' if br and (r.get("bust") or 0) >= 0.08 else ""
+        drop = (f'<div class="mv drop"><span class="verb">Drop</span><div><span class="p">{e(r["drop"])}</span><br><span class="m">{e(r["drop_why"])}</span></div></div>'
+                if r["drop"] else '<div class="mv drop"><span class="verb">Drop</span><div><span class="p">No one</span><br><span class="m">you have an open roster spot</span></div></div>')
+        steps.append(f'<li class="step"><div class="num">{n}</div><div class="body">'
+                     f'<div class="mv add"><span class="verb">Add</span><div><span class="p">{e(r["name"])}</span> <span class="m">{e(r["pos"])} · {e(r["team"])}</span>{risk}'
+                     f'<br><span class="m">{e(r["why"])}</span></div></div>{drop}'
+                     + ('<div class="m">Then put him in your starting lineup.</div>' if r["starts"] else "") + f'</div><div class="bidbox">{bid}</div></li>')
+    if steps:
+        h.append('<section><h2>Moves to make</h2><div class="sub">Put these claims in, in this order. Each one already accounts for the moves above it.</div>'
+                 f'<ol class="steps">{"".join(steps)}</ol></section>')
+    else:
+        h.append('<section><h2>Moves to make</h2><div class="sub">None. No free agent beats what you already have by enough to matter this week.</div></section>')
 
     def bust(r):
         v = r.get("bust")
@@ -183,11 +206,11 @@ def league(L, i):
                  td(e(r["kind"])), td(r["wk"], 1), td(r["ppg"], 1), td(sign(r["d_ros"]), 1), td(sign(r["d_wk"]), 1)]
                 + ([td(bust(r), 1)] if br else [])
                 + [td(bidc(r), 1), td(comp(r)), td(e(r["drop"]) if r["drop"] else '<span class="m">open spot</span>')] for r in L["waivers"]]
-        h.append('<section><h2>Waiver targets</h2><div class="sub">Ranked by points added to your best lineup. Bid is the lower of what he is worth to you and what clears the top rival. Blocks = he would also improve this week\'s opponent.</div>'
+        h.append('<section><h2>Other waiver options</h2><div class="sub">Fallbacks if a claim above fails, each priced against your current roster. Bid is the lower of what he is worth to you and what clears the top rival. Blocks = he would also improve this week\'s opponent.</div>'
                  + table(["Player", "Role", ">Wk proj", ">ROS / gm", ">ROS gain", ">Wk gain"] + ([f">≤{br['threshold']} pt risk"] if br else [])
-                         + [">Bid", "Competition", "Drop"], rows) + "</section>")
+                         + [">Bid", "Competition", "Would replace"], rows) + "</section>")
     else:
-        h.append('<section><h2>Waiver targets</h2><div class="sub">Nothing on the wire improves your lineup this week.</div></section>')
+        h.append('<section><h2>Other waiver options</h2><div class="sub">Nothing else on the wire improves your lineup.</div></section>')
 
     if L["trades_open"]:
         cards = []
