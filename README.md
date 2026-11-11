@@ -22,6 +22,26 @@ page of decisions: optimal lineup, waiver targets with FAAB bids, trade offers, 
 - **Waiver / trade gain** = change in your optimal-lineup points over the rest of the season, net of what a
   free streamer would score in that slot. Trades must also help the other team and be close on player value.
 
+## Season layer
+
+- **Playoff odds**: 4,000 simulations of the remaining schedule using each team's weekly optimal-lineup projection.
+- **Playoff weighting**: playoff weeks count 0.5x to 2.0x in waiver and trade values, scaled by your odds of being there.
+- **Role growth**: snap share and touches + targets, last two games versus the two before; also nudges future projections up to 10%.
+- **Rival-aware FAAB**: bid = the lower of your own ceiling and what clears the most motivated rival's estimated bid.
+  Free agents who would improve this week's opponent are tagged as blocks.
+
+## League-specific rules (per league in `config.json`)
+
+- `victory_points`: `{win, top3, top6}`. Standings, playoff odds and the weekly outlook use VP instead of record.
+- `low_score_rule`: `{threshold, penalty_pts}`. Shows each player's chance of scoring at or below the threshold and
+  docks that risk from lineup choices (`penalty_pts` = how many points one dud costs you).
+
+## Sportsbook props (optional)
+
+Add an `ODDS_API_KEY` repository secret (the-odds-api.com). Player props from US books are then averaged with the
+Kalshi markets. A pull costs about 90 credits, so it only runs on `odds_api_days` (Sunday by default) to stay inside
+the free 500/month tier. This path has not been exercised with a live key yet.
+
 ## Settings: `config.json`
 
 Leagues are listed in priority order. For ESPN, `my_team` is any part of your team name.

@@ -57,20 +57,31 @@ def load_league(league_id, my_user_id, week):
             "pf": rs.get("fpts", 0) + rs.get("fpts_decimal", 0) / 100,
             "faab_left": (s.get("waiver_budget") or 0) - rs.get("waiver_budget_used", 0),
         })
+    def pairs(rows):
+        by_mid = {}
+        for m in rows or []:
+            if m.get("matchup_id") is not None:
+                by_mid.setdefault(m["matchup_id"], []).append(m)
+        return [p for p in by_mid.values() if len(p) == 2]
+
     opp = {}
-    by_mid = {}
-    for m in matchups:
-        if m.get("matchup_id") is not None:
-            by_mid.setdefault(m["matchup_id"], []).append(m["roster_id"])
-    for pair in by_mid.values():
-        if len(pair) == 2:
-            opp[pair[0]], opp[pair[1]] = pair[1], pair[0]
+    for a, b in pairs(matchups):
+        opp[a["roster_id"]], opp[b["roster_id"]] = b["roster_id"], a["roster_id"]
+    playoff_start = s.get("playoff_week_start") or 15
+    schedule = {week: [(a["roster_id"], b["roster_id"]) for a, b in pairs(matchups)]}
+    for w in range(week + 1, playoff_start):
+        schedule[w] = [(a["roster_id"], b["roster_id"]) for a, b in
+                       pairs(get_json(f"{API}/league/{league_id}/matchups/{w}", ttl=3600))]
+    history = []  # completed weeks: [(roster_a, pts_a, roster_b, pts_b)]
+    for w in range(1, week):
+        history.append([(a["roster_id"], a.get("points") or 0, b["roster_id"], b.get("points") or 0)
+                        for a, b in pairs(get_json(f"{API}/league/{league_id}/matchups/{w}", ttl=86400))])
     return {
         "platform": "Sleeper", "id": str(league_id), "name": lg.get("name"),
         "scoring": lg.get("scoring_settings") or {},
         "slots": [p for p in lg.get("roster_positions", []) if p not in ("BN", "IR", "TAXI")],
         "bench": sum(1 for p in lg.get("roster_positions", []) if p == "BN"),
-        "teams": teams, "my_team": my_id, "opponents": opp,
+        "teams": teams, "my_team": my_id, "opponents": opp, "schedule": schedule, "history": history,
         "faab": s.get("waiver_type") == 2, "faab_budget": s.get("waiver_budget") or 0,
         "trade_deadline": s.get("trade_deadline"), "playoff_start": s.get("playoff_week_start") or 15,
         "playoff_teams": s.get("playoff_teams") or 6,

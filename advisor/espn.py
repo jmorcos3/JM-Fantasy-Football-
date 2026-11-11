@@ -88,10 +88,15 @@ def load_league(cfg, season, week, players):
                       "wins": rec.get("wins", 0), "losses": rec.get("losses", 0), "pf": rec.get("pointsFor", 0),
                       "faab_left": st["acquisitionSettings"].get("acquisitionBudget", 0)
                       - t.get("transactionCounter", {}).get("acquisitionBudgetSpent", 0)})
-    opp = {}
+    opp, schedule = {}, {}
+    last_reg = st["scheduleSettings"].get("matchupPeriodCount", 14)
     for m in d.get("schedule", []):
-        if m.get("matchupPeriodId") == week and m.get("home") and m.get("away"):
-            a, b = m["home"]["teamId"], m["away"]["teamId"]
+        w = m.get("matchupPeriodId")
+        if not (m.get("home") and m.get("away")) or w is None or not (week <= w <= last_reg):
+            continue
+        a, b = m["home"]["teamId"], m["away"]["teamId"]
+        schedule.setdefault(w, []).append((a, b))
+        if w == week:
             opp[a], opp[b] = b, a
     dl = (st.get("tradeSettings") or {}).get("deadlineDate")
     closed = bool(dl) and time.time() * 1000 > dl
@@ -100,7 +105,7 @@ def load_league(cfg, season, week, players):
     return {
         "unmapped": unmapped, "my_starters": starters.get(my_id), "ignored_slots": ignored,
         "platform": "ESPN", "id": str(lid), "name": st.get("name"), "scoring": scoring, "slots": slots, "bench": bench,
-        "teams": teams, "my_team": my_id, "opponents": opp,
+        "teams": teams, "my_team": my_id, "opponents": opp, "schedule": schedule, "history": [],
         "faab": bool(st["acquisitionSettings"].get("isUsingAcquisitionBudget")),
         "faab_budget": st["acquisitionSettings"].get("acquisitionBudget", 0),
         "trade_deadline": week - 1 if closed else None, "playoff_start": st["scheduleSettings"].get("matchupPeriodCount", 14) + 1,

@@ -1,4 +1,6 @@
-"""Projection model: league-specific scoring, market blend, recent form, lineup optimiser."""
+"""Projection model: league-specific scoring, market blend, recent form, usage trends, lineup optimiser."""
+import math
+
 from . import markets
 
 ELIG = {"QB": {"QB"}, "RB": {"RB"}, "WR": {"WR"}, "TE": {"TE"}, "K": {"K"}, "DEF": {"DEF"},
@@ -29,6 +31,24 @@ class Model:
                     self.recent[pid] = self.recent.get(pid, 0) + score(st, sc)
                     self.recent_gp[pid] = self.recent_gp.get(pid, 0) + 1
         self.recent = {p: v / self.recent_gp[p] for p, v in self.recent.items()}
+
+        # usage trend: snap share and opportunities (carries + targets), last 2 games vs the 2 before
+        self.usage = {}
+        hist = {}
+        for w in sorted(data["stats"]):
+            if w < self.week - 4:
+                continue
+            for pid, r in data["stats"][w].items():
+                st = r["stats"]
+                if st.get("off_snp") and st.get("tm_off_snp"):
+                    hist.setdefault(pid, []).append((st["off_snp"] / st["tm_off_snp"],
+                                                     (st.get("rush_att") or 0) + (st.get("rec_tgt") or 0)))
+        for pid, h in hist.items():
+            if len(h) >= 3:
+                new, old = h[-2:], h[:-2]
+                avg = lambda rows, i: sum(r[i] for r in rows) / len(rows)
+                self.usage[pid] = {"snap": avg(new, 0), "d_snap": avg(new, 0) - avg(old, 0),
+                                   "opp": avg(new, 1), "d_opp": avg(new, 1) - avg(old, 1)}
 
         self.base, self.proj, self.mkt_delta, self.opp = {}, {}, {}, {}
         name_idx = {}
@@ -64,6 +84,9 @@ class Model:
             for pid, v in self.base[w].items():
                 if v > 0 and self.recent_gp.get(pid, 0) >= 2:
                     v = (1 - rf) * v + rf * self.recent[pid]
+                u = self.usage.get(pid)
+                if u and self.pos(pid) in ("RB", "WR", "TE"):
+                    v *= 1 + max(-0.1, min(0.1, 0.5 * u["d_snap"]))  # role growing or shrinking
                 if hurt.get(pid) in ("IR", "PUP", "NFI"):
                     v *= 0.5  # return date unknown: haircut the rest-of-season outlook
                 self.proj[w][pid] = v
@@ -83,6 +106,32 @@ class Model:
                 if v > 0:
                     self.ros[pid] = self.ros.get(pid, 0) + v
                     self.games[pid] = self.games.get(pid, 0) + 1
+
+        self.week_w = {w: 1.0 for w in self.weeks}  # playoff weighting, set after the season simulation
+
+        # chance of a dud (score at or below a threshold) this week, for leagues that punish it
+        self.bust, self.pick = {}, {}
+        rule = league.get("rules", {}).get("low_score_rule")
+        if rule:
+            thr, bad, gp = rule["threshold"], {}, {}
+            for w, rows in data["stats"].items():
+                for pid, r in rows.items():
+                    st = r["stats"]
+                    if st.get("gp") or st.get("off_snp") or self.pos(pid) == "DEF":
+                        gp[pid] = gp.get(pid, 0) + 1
+                        bad[pid] = bad.get(pid, 0) + (score(st, sc) <= thr)
+            scale = {"DEF": 3.5, "K": 2.5}
+            for pid, mu in self.proj[self.week].items():
+                if mu <= 0:
+                    self.bust[pid] = 1.0
+                    continue
+                prior = math.exp(-max(mu - thr, 0) / scale.get(self.pos(pid), 3.0))
+                if self.pos(pid) == "DEF":
+                    tot = (self.lines.get(self.opp.get(pid) or "") or {}).get("implied")
+                    if tot:
+                        prior = min(0.9, prior * (tot / 22) ** 2)  # tougher offence -> more blow-up risk
+                self.bust[pid] = (bad.get(pid, 0) + 4 * prior) / (gp.get(pid, 0) + 4)
+            self.pick = {pid: mu - self.bust.get(pid, 0) * rule["penalty_pts"] for pid, mu in self.proj[self.week].items()}
 
         self.rostered = {pid for t in league["teams"] for pid in t["players"]}
         self.free = [pid for pid in self.ros if pid not in self.rostered and self.pos(pid) in ELIG
@@ -122,7 +171,8 @@ class Model:
         floor=True credits every slot with at least a waiver-wire streamer, so bye-week
         holes are not over-valued when pricing trades and pickups."""
         pts = self.proj[week]
-        pool = sorted(pids, key=lambda p: -pts.get(p, 0))
+        rank = self.pick if week == self.week and self.pick else pts  # dud-risk adjusted ordering
+        pool = sorted(pids, key=lambda p: -rank.get(p, 0))
         used, out, total = set(), [], 0.0
         order = sorted(range(len(self.lg["slots"])), key=lambda i: len(ELIG.get(self.lg["slots"][i], ())))
         picks = {}
@@ -143,7 +193,7 @@ class Model:
     def team_value(self, pids, floor_from=None):
         """Sum of optimal-lineup points over the remaining weeks."""
         f = self.week if floor_from is None else floor_from
-        return sum(self.lineup(pids, w, floor=w >= f)[1] for w in self.weeks)
+        return sum(self.week_w[w] * self.lineup(pids, w, floor=w >= f)[1] for w in self.weeks)
 
     def active(self, team):
         return [p for p in team["players"] if p not in team["reserve"]]

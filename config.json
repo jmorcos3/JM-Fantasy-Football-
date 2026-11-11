@@ -3,7 +3,16 @@
   "leagues": [
     {
       "platform": "sleeper",
-      "league_id": "1383841893313417216"
+      "league_id": "1383841893313417216",
+      "victory_points": {
+        "win": 3,
+        "top3": 2,
+        "top6": 1
+      },
+      "low_score_rule": {
+        "threshold": 1,
+        "penalty_pts": 4
+      }
     },
     {
       "platform": "espn",
@@ -22,5 +31,11 @@
   ],
   "market_weight": 0.5,
   "recent_form_weight": 0.3,
-  "last_week_of_season": 17
+  "last_week_of_season": 17,
+  "playoff_weighting": true,
+  "sim_runs": 4000,
+  "weekly_score_sd": 24,
+  "odds_api_days": [
+    "Sun"
+  ]
 }

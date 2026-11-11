@@ -122,6 +122,62 @@ def kalshi_props(days_ahead=7):
     return out
 
 
+ODDS_API = "https://api.the-odds-api.com/v4/sports/americanfootball_nfl"
+BOOK_MARKETS = {"player_pass_yds": "pass_yd", "player_rush_yds": "rush_yd", "player_reception_yds": "rec_yd",
+                "player_receptions": "rec", "player_pass_tds": "pass_td", "player_anytime_td": "td"}
+
+
+def sportsbook_props(key):
+    """Consensus sportsbook player props via The Odds API. Each call costs credits (about 6 per game),
+    so the runner only calls this on the configured days. Returns the same shape as kalshi_props()."""
+    events = get_json(f"{ODDS_API}/events?apiKey={key}", ttl=3600)
+    horizon = datetime.now(timezone.utc) + timedelta(days=7)
+    vals = {}
+    for ev in events:
+        if datetime.fromisoformat(ev["commence_time"].replace("Z", "+00:00")) > horizon:
+            continue
+        d = get_json(f"{ODDS_API}/events/{ev['id']}/odds?apiKey={key}&regions=us&oddsFormat=decimal"
+                     f"&markets={','.join(BOOK_MARKETS)}", ttl=3600)
+        for book in d.get("bookmakers", []):
+            for mk in book.get("markets", []):
+                stat = BOOK_MARKETS.get(mk["key"])
+                sides = {}
+                for o in mk.get("outcomes", []):
+                    who = o.get("description") or o.get("name")
+                    sides.setdefault(norm_name(who), {})[o["name"]] = o
+                for name, sd in sides.items():
+                    if stat == "td":
+                        yes = sd.get("Yes") or next(iter(sd.values()))
+                        p = min(0.95, (1 / yes["price"]) / 1.08)  # strip a typical one-sided margin
+                        val = -math.log(1 - p)
+                    elif "Over" in sd and "Under" in sd and sd["Over"].get("point") is not None:
+                        po, pu = 1 / sd["Over"]["price"], 1 / sd["Under"]["price"]
+                        p_over, line = po / (po + pu), sd["Over"]["point"]
+                        if stat == "pass_td":  # Poisson mean whose P(X > line) matches the de-vigged price
+                            lo, hi = 0.05, 6.0
+                            for _ in range(40):
+                                mid = (lo + hi) / 2
+                                cdf = sum(math.exp(-mid) * mid ** k / math.factorial(k) for k in range(int(line) + 1))
+                                lo, hi = (mid, hi) if 1 - cdf < p_over else (lo, mid)
+                            val = (lo + hi) / 2
+                        else:
+                            val = line * (1 + 0.6 * (p_over - 0.5))  # shade the line toward the favoured side
+                    else:
+                        continue
+                    vals.setdefault(name, {}).setdefault(stat, []).append(val)
+    return {n: {k: sum(v) / len(v) for k, v in st.items()} for n, st in vals.items()}
+
+
+def merge_props(a, b):
+    """Average two prop sources where both price a stat."""
+    out = {n: dict(v) for n, v in a.items()}
+    for n, st in b.items():
+        for k, v in st.items():
+            cur = out.setdefault(n, {}).get(k)
+            out[n][k] = v if cur is None else (cur + v) / 2
+    return out
+
+
 def apply_market(base_stats, mkt):
     """Overlay market-implied means on a baseline projected stat line. Returns (stats, n_signals)."""
     s, n = dict(base_stats), 0

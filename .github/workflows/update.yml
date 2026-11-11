@@ -32,6 +32,7 @@ jobs:
         env:
           ESPN_S2: ${{ secrets.ESPN_S2 }}
           ESPN_SWID: ${{ secrets.ESPN_SWID }}
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site

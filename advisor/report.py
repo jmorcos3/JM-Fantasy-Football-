@@ -95,23 +95,59 @@ def league(L, i):
     k = [(L["record"], "Record"), (L["lineup"]["total"], f'Projected, week {L["week"]}')]
     if mu:
         k += [(mu["them"], f'Opponent: {e(mu["opp"])}'), (f'{round(mu["win"] * 100)}%', "Win probability")]
+    k.append((f'{round(L["playoff_odds"] * 100)}%', f'Playoff odds · avg seed {L["seed"]}'))
+    ws = L.get("week_sim")
+    if L.get("vp_rules") and ws:
+        k += [(L["vp"], "Victory points"), (f'{ws["vp"]:.1f}', "Expected VP this week"),
+              (f'{round(ws["top3"] * 100)}% / {round(ws["top6"] * 100)}%', "Top-3 / top-6 score odds")]
+    if L["lineup"].get("any_bust") is not None:
+        k.append((f'{round(L["lineup"]["any_bust"] * 100)}%', f'Chance a starter scores ≤{L["bust_rule"]["threshold"]} (beer)'))
     if L.get("faab") is not None:
         k.append((f'${L["faab"]}', "FAAB left"))
     h.append('<div class="kpis">' + "".join(f'<div class="kpi"><b>{v}</b><span>{l}</span></div>' for v, l in k) + "</div>")
 
-    rows = [[td(e(r["slot"])), td(who(r) if r.get("team") else f'<span class="p">{e(r["name"])}</span>'), td(game(r)),
-             td(r["wk"], 1), td(sign(r.get("mkt")), 1), td(FLAG.get(r.get("change"), ""))] for r in L["lineup"]["starters"]]
-    rows += [[td(e(r["slot"])), td(who(r)), td(game(r)), td(r["wk"], 1), td(sign(r.get("mkt")), 1), td(FLAG.get(r.get("change"), ""))]
-             for r in L["lineup"]["bench"]]
-    h.append(f'<section><h2>Optimal lineup, week {L["week"]}</h2><div class="sub">Starters first, then bench. Market column = shift from betting-market player props.</div>'
-             + table(["Slot", "Player", "Game", ">Proj", ">Market", "Action"], rows) + "</section>")
+    br = L.get("bust_rule")
+
+    def bust(r):
+        v = r.get("bust")
+        if v is None:
+            return '<span class="m">–</span>'
+        return f'<span class="pill b">{round(v * 100)}%</span>' if v >= 0.08 else f'{round(v * 100)}%'
+
+    def lrow(r):
+        cells = [td(e(r["slot"])), td(who(r) if r.get("team") else f'<span class="p">{e(r["name"])}</span>'), td(game(r)),
+                 td(r["wk"], 1), td(sign(r.get("mkt")), 1)]
+        if br:
+            cells.append(td(bust(r) if r.get("team") else '<span class="pill b">100%</span>', 1))
+        return cells + [td(FLAG.get(r.get("change"), ""))]
+
+    head = ["Slot", "Player", "Game", ">Proj", ">Market"] + ([f">≤{br['threshold']} pt risk"] if br else []) + ["Action"]
+    note = (f' Lineup choices are penalised for the chance of scoring {br["threshold"]} or less.' if br else "")
+    h.append(f'<section><h2>Optimal lineup, week {L["week"]}</h2><div class="sub">Starters first, then bench. Market column = shift from betting-market player props.{note}</div>'
+             + table(head, [lrow(r) for r in L["lineup"]["starters"] + L["lineup"]["bench"]]) + "</section>")
 
     if L["waivers"]:
-        rows = [[td(who(r) + (' <span class="pill w">Trending</span>' if r["hot"] else "")), td(e(r["kind"])), td(r["wk"], 1), td(r["ppg"], 1),
-                 td(sign(r["d_ros"]), 1), td(sign(r["d_wk"]), 1), td(f'${r["bid"]}' if r["bid"] is not None else "–", 1),
-                 td(e(r["drop"]) if r["drop"] else '<span class="m">open spot</span>')] for r in L["waivers"]]
-        h.append('<section><h2>Waiver targets</h2><div class="sub">Ranked by points added to your best lineup: rest of season, then this week. Bid is a suggested FAAB amount.</div>'
-                 + table(["Player", "Role", ">Wk proj", ">ROS / gm", ">ROS gain", ">Wk gain", ">Bid", "Drop"], rows) + "</section>")
+        def comp(r):
+            if not r["want"]:
+                return '<span class="m">no rival demand</span>'
+            t = f'{r["want"]} team{"s" if r["want"] > 1 else ""}'
+            if r.get("rival_bid") is not None:
+                t += f'<br><span class="m">top: {e(r["rival"])} ~${r["rival_bid"]}</span>'
+            return t
+
+        def bidc(r):
+            if r["bid"] is None:
+                return "–"
+            return f'${r["bid"]}' + ('<br><span class="pill b">may be outbid</span>' if r["outbid"] else "")
+
+        rows = [[td(who(r) + (' <span class="pill w">Trending</span>' if r["hot"] else "")
+                    + (f' <span class="pill">Blocks opponent +{r["block"]}</span>' if r.get("block") else "")),
+                 td(e(r["kind"])), td(r["wk"], 1), td(r["ppg"], 1), td(sign(r["d_ros"]), 1), td(sign(r["d_wk"]), 1)]
+                + ([td(bust(r), 1)] if br else [])
+                + [td(bidc(r), 1), td(comp(r)), td(e(r["drop"]) if r["drop"] else '<span class="m">open spot</span>')] for r in L["waivers"]]
+        h.append('<section><h2>Waiver targets</h2><div class="sub">Ranked by points added to your best lineup. Bid is the lower of what he is worth to you and what clears the top rival. Blocks = he would also improve this week\'s opponent.</div>'
+                 + table(["Player", "Role", ">Wk proj", ">ROS / gm", ">ROS gain", ">Wk gain"] + ([f">≤{br['threshold']} pt risk"] if br else [])
+                         + [">Bid", "Competition", "Drop"], rows) + "</section>")
     else:
         h.append('<section><h2>Waiver targets</h2><div class="sub">Nothing on the wire improves your lineup this week.</div></section>')
 
@@ -134,10 +170,22 @@ def league(L, i):
         h.append('<section><h2>Where the markets disagree</h2><div class="sub">Largest gaps between prediction-market props and the baseline projection, among your players and free agents.</div>'
                  + table(["Player", "Status", ">Baseline", ">Blended", ">Shift"], rows) + "</section>")
 
-    rows = [[td(n + 1, 1), td(f'<span class="p">{e(p["name"])}</span>'), td(p["rec"]), td(p["pf"], 1), td(p["wk"], 1), td(p["ros"], 1),
+    if L.get("breakouts"):
+        rows = [[td(who(r)), td(r["status"]), td(f'{r["snap"]}%', 1), td(sign(r["d_snap"], " pts"), 1), td(r["opps"], 1), td(sign(r["d_opp"]), 1), td(r["ppg"], 1)]
+                for r in L["breakouts"]]
+        h.append('<section><h2>Role growth watch</h2><div class="sub">Snap share and touches + targets over the last two games versus the two before. Roles move before projections do.</div>'
+                 + table(["Player", "Status", ">Snap share", ">Change", ">Touches + targets", ">Change", ">ROS / gm"], rows) + "</section>")
+
+    rows = [[td(n + 1, 1), td(f'<span class="p">{e(p["name"])}</span>'), td(p["rec"])] + ([td(p["vp"], 1)] if L.get("vp_rules") else [])
+            + [td(f'{round(p["odds"] * 100)}%', 1), td(p["pf"], 1), td(p["wk"], 1), td(p["ros"], 1),
              td(f'${p["faab"]}' if L.get("faab") is not None else "–", 1)] for n, p in enumerate(L["power"])]
-    h.append('<section><h2>League power ranking</h2><div class="sub">Sorted by projected weekly points for the rest of the season.</div>'
-             + table([">#", "Team", "Record", ">Points for", ">This week", ">ROS / wk", ">FAAB"], rows, ["me" if p["me"] else "" for p in L["power"]]) + "</section>")
+    vpn = ""
+    if L.get("vp_rules"):
+        v = L["vp_rules"]
+        vpn = f' Standings use victory points: {v["win"]} for a win, +{v["top3"]} for a top-3 weekly score, +{v["top6"]} for top-6.'
+    h.append(f'<section><h2>Playoff race</h2><div class="sub">Odds from {4000:,} simulations of the remaining schedule; top {L["playoff_teams"]} qualify, playoffs start week {L["playoff_start"]}.{vpn} '
+             f'Your playoff weeks are weighted ×{L["playoff_weight"]} in waiver and trade values.</div>'
+             + table([">#", "Team", "Record"] + ([">VP"] if L.get("vp_rules") else []) + [">Playoff odds", ">Points for", ">This week", ">ROS / wk", ">FAAB"], rows, ["me" if p["me"] else "" for p in L["power"]]) + "</section>")
     h.append("</div>")
     return "".join(h)
 
