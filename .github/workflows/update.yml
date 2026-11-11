@@ -1,0 +1,39 @@
+name: Update advice
+on:
+  schedule:
+    - cron: "17 13 * * 2"   # Tue morning ET: waiver planning
+    - cron: "17 1 * * 3"    # Tue night ET: before waivers clear
+    - cron: "17 21 * * 4"   # Thu afternoon ET: before TNF
+    - cron: "17 14 * * 0"   # Sun morning ET: final lineups
+    - cron: "17 16 * * 0"   # Sun 11am ET: inactives are out
+    - cron: "17 21 * * 1"   # Mon afternoon ET: before MNF
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python run.py
+        env:
+          ESPN_S2: ${{ secrets.ESPN_S2 }}
+          ESPN_SWID: ${{ secrets.ESPN_SWID }}
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,26 @@
+{
+  "sleeper_username": "jmorcos3",
+  "leagues": [
+    {
+      "platform": "sleeper",
+      "league_id": "1383841893313417216"
+    },
+    {
+      "platform": "espn",
+      "league_id": 97039989,
+      "my_team": "Huncho Jack"
+    },
+    {
+      "platform": "sleeper",
+      "league_id": "1389358475875721216"
+    },
+    {
+      "platform": "espn",
+      "league_id": 613188,
+      "my_team": ""
+    }
+  ],
+  "market_weight": 0.5,
+  "recent_form_weight": 0.3,
+  "last_week_of_season": 17
+}
