@@ -52,6 +52,11 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .verb{font:600 11px var(--body);text-transform:uppercase;letter-spacing:.06em}
 .add .verb{color:var(--good)}.drop .verb{color:var(--bad)}
 .bidbox{text-align:right}.bidbox .lab{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}.bidbox b{font:600 19px var(--display)}
+header{display:flex;flex-direction:column;gap:6px}
+.refresh{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:4px}
+.btn{display:inline-block;font:600 13px var(--body);padding:9px 16px;border-radius:999px;background:var(--accent);color:var(--bg);text-decoration:none}
+.btn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.stale{color:var(--warn);font-weight:600}
 .note{font-weight:400;font-size:12px;padding:8px 12px}
 /* phone: every table row becomes a card, so no decision column is ever off-screen */
 @media (max-width:680px){
@@ -79,6 +84,9 @@ document.querySelectorAll('.tabs button').forEach(function(b){b.addEventListener
 document.querySelectorAll('.tabs button').forEach(function(x){x.setAttribute('aria-selected',x===b)});
 document.querySelectorAll('.league').forEach(function(l){l.hidden=l.id!==b.dataset.t});
 try{localStorage.setItem('ff-tab',b.dataset.t)}catch(_){}});});
+(function(){var u=document.getElementById('upd');if(!u)return;var d=new Date(u.dataset.t.replace('+00:00','Z'));if(isNaN(d))return;
+var h=(Date.now()-d)/36e5,ago=h<1?Math.max(1,Math.round(h*60))+' min ago':h<48?Math.round(h)+' h ago':Math.round(h/24)+' days ago';
+u.textContent=d.toLocaleString([], {weekday:'short',hour:'numeric',minute:'2-digit'})+' ('+ago+')';if(h>18){u.className='stale';u.textContent+=' · stale, refresh'}})();
 try{var t=localStorage.getItem('ff-tab');var b=t&&document.querySelector('.tabs button[data-t="'+t+'"]');if(b)b.click()}catch(_){}
 """
 
@@ -272,7 +280,10 @@ def fragment(out):
     return (f'<title>Fantasy War Room</title><meta name="claude:viewport-fit-sides" content="cover">'
             '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Space+Grotesk:wght@600&display=swap">'
             f'<style>{CSS}</style><div class="wrap"><header><h1>Fantasy War Room</h1>'
-            f'<div class="sub">{e(out["season"])} season · week {out["week"]} · updated {e(out["generated"].replace("T", " ")[:16])} UTC</div></header>'
+            f'<div class="sub">{e(out["season"])} season · week {out["week"]} · updated <span id="upd" data-t="{e(out["generated"])}">{e(out["generated"].replace("T", " ")[:16])} UTC</span></div>'
+            + (f'<div class="refresh"><a class="btn" href="https://github.com/{e(out["repo"])}/actions/workflows/update.yml" target="_blank" rel="noopener">Refresh now</a>'
+               '<span class="m">Opens GitHub: tap Run workflow, wait about a minute, then reload this page.</span></div>' if out.get("repo") else "")
+            + '</header>'
             f'<div class="bar"><div class="tabs" role="tablist">{tabs}</div></div>{notes}' + "".join(league(L, i) for i, L in enumerate(out["leagues"]))
             + '<footer>Projections: Rotowire weekly stat lines re-scored with each league\'s own rules, blended 50/50 with stat lines implied by Kalshi '
               'player-prop markets where a liquid market exists, and nudged toward the last four weeks of actual production for future weeks. '

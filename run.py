@@ -68,7 +68,7 @@ def main():
             notes.append(f"{c['platform'].upper()} league {lid} not loaded: {why}.")
 
     out = {"generated": datetime.now(timezone.utc).isoformat(timespec="minutes"), "season": season, "week": week,
-           "notes": notes, "games": data["lines"], "leagues": []}
+           "repo": cfg.get("repo"), "notes": notes, "games": data["lines"], "leagues": []}
     for lg, starters in leagues:
         m = Model(lg, data, cfg)
         season_sim = sim.run(m, cfg)

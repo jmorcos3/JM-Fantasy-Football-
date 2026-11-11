@@ -53,8 +53,9 @@ Both are cookies on espn.com once you are logged in (browser dev tools → Appli
 
 ## Auto-refresh
 
-`.github/workflows/update.yml` rebuilds the page six times a week and publishes it with GitHub Pages
+`.github/workflows/update.yml` rebuilds the page eight times a week (including right after Wednesday waivers clear) and publishes it with GitHub Pages
 (Settings → Pages → Source: GitHub Actions). Pages sites are public even when the repo is private.
+The page's **Refresh now** button opens the workflow on GitHub; tap *Run workflow* for an on-demand rebuild.
 
 ## Known gaps
 
