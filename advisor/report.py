@@ -10,6 +10,7 @@ CSS = """
 --good:#5cd6a4;--bad:#ff8f84;--warn:#f0c060;--warn-soft:#3a2f12;--bad-soft:#41201d;color-scheme:dark}}
 :root[data-theme="dark"]{--bg:#0e1512;--panel:#16201b;--ink:#e6ede8;--muted:#93a39a;--line:#28362f;--accent:#4fd0a0;--accent-soft:#17352a;
 --good:#5cd6a4;--bad:#ff8f84;--warn:#f0c060;--warn-soft:#3a2f12;--bad-soft:#41201d;color-scheme:dark}
+[hidden]{display:none!important}
 body{background:var(--bg);color:var(--ink);font:14px/1.45 var(--body);margin:0}
 .wrap{max-width:1040px;margin:0 auto;padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:20px}
 h1,h2{font-family:var(--display);margin:0;text-wrap:balance}h1{font-size:24px}h2{font-size:17px}
