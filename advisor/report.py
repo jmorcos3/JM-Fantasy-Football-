@@ -102,9 +102,9 @@ def game(r):
     return f'{"vs" if r.get("home") else "@"} {e(r["opp"])}{tot}'
 
 
-MAIN = {"Player", "Team", "Buy low", "Sell high"}
-WIDE = {"Action", "Owner"}
-KEY = {"Proj", "Bid", "Playoff odds", "Outlook / gm", "Shift", "Snap share"}
+MAIN = {"Player", "Team", "Buy low", "Sell high", "Position"}
+WIDE = {"Action", "Owner", "Best on waivers", "Verdict"}
+KEY = {"League rank", "Proj", "Bid", "Playoff odds", "Outlook / gm", "Shift", "Snap share"}
 HIDE = {"Slot", "#"}
 HALF = {"Game", "Competition", "Would replace", "Status"}
 
@@ -213,13 +213,26 @@ def league(L, i):
         h.append('<section><h2>Other waiver options</h2><div class="sub">Nothing else on the wire improves your lineup.</div></section>')
 
     if L["trades_open"]:
+        if L.get("needs"):
+            def vd(n):
+                c = "b" if n["verdict"].startswith("Trade") else ("w" if n["verdict"].startswith("Fix") else "")
+                return f'<span class="pill {c}">{e(n["verdict"])}</span>' if n["verdict"] != "Fine" else '<span class="m">Fine</span>'
+            rows = [[td(f'<span class="p">{e(n["pos"])}</span>'), td(f'{n["rank"]} of {n["teams"]}', 1), td(n["ppg"], 1),
+                     td((f'{e(n["fa"])} <span class="m">{n["fa_ppg"]}/gm · {n["fa_gain"]:+.1f} ROS</span>') if n["fa"] else '<span class="m">nothing useful</span>'),
+                     td(vd(n))] for n in L["needs"]]
+            h.append('<section><h2>Positional needs</h2><div class="sub">Where your starters rank in the league, and whether a free pickup closes the gap before you pay in a trade.</div>'
+                     + table(["Position", ">League rank", ">Starters / gm", "Best on waivers", "Verdict"], rows) + "</section>")
         cards = []
         for t in L["trades"]:
             side = lambda cs: "<br>".join(f'<span class="p">{e(c["name"])}</span> <span class="m">{e(c["pos"])} · {c["ppg"]}/gm</span>' for c in cs)
             cards.append(f'<div class="trade"><span class="lab">With {e(t["partner"])}</span><div><span class="lab">Give</span><br>{side(t["give"])}</div>'
                          f'<div><span class="lab">Get</span><br>{side(t["get"])}</div>'
-                         f'<div class="m">Your lineup {sign(t["my_gain"], " pts ROS")} · theirs {sign(t["their_gain"], " pts")}</div></div>')
-        h.append('<section><h2>Trade offers to send</h2><div class="sub">Each one raises your rest-of-season lineup and theirs, and is close to even on player value, so it has a real chance of being accepted.</div>'
+                         f'<div class="m">Your lineup {sign(t["my_gain"], " pts ROS")} · theirs {sign(t["their_gain"], " pts")}</div>'
+                         + (f'<div class="m">{sign(t["edge"], " pts")} more than adding {e(t["wire_name"])} off waivers</div>' if t.get("wire_name") else "")
+                         + '<div>' + (f'<span class="pill w">Fixes weak {e(t["fixes"])}</span> ' if t.get("fixes") else "")
+                         + "".join(f'<span class="pill">From {e(p)} surplus</span> ' for p in t.get("from_strength", []))
+                         + "".join(f'<span class="pill b">Thins weak {e(p)}</span> ' for p in t.get("opens_hole", [])) + '</div></div>')
+        h.append('<section><h2>Trade offers to send</h2><div class="sub">Ranked by gain beyond what waivers already offer at that position, favouring deals that fix a weak spot from a surplus. Each also helps the other team and is close on value, so it can get accepted.</div>'
                  + ('<div class="trades">' + "".join(cards) + "</div>" if cards else '<div class="sub">No mutually beneficial deals found this week.</div>') + "</section>")
         b = table(["Buy low", "Owner", ">Outlook / gm", ">Last 4 / gm"], [[td(who(r)), td(e(r["owner"]), wrap=True), td(r["ppg"], 1), td(r["recent"], 1)] for r in L["buy"]]) if L["buy"] else '<div class="sub">None.</div>'
         s = table(["Sell high", ">Outlook / gm", ">Last 4 / gm"], [[td(who(r)), td(r["ppg"], 1), td(r["recent"], 1)] for r in L["sell"]]) if L["sell"] else '<div class="sub">None on your roster.</div>'

@@ -175,7 +175,39 @@ def move_plan(m, me, trending, opp, max_moves=4):
     return moves
 
 
-def trades(m, me, top=8):
+def positional(m, me, wv):
+    """Per position: how your starters rank in the league, and whether the waiver wire can fix it."""
+    n_teams, out = len(m.lg["teams"]), []
+    for pos in SKILL:
+        n = sum(1 for s in m.lg["slots"] if s == pos)
+        if not n:
+            continue
+
+        def strength(t):
+            top = sorted((m.ppg(p) for p in m.active(t) if m.pos(p) == pos), reverse=True)[:n]
+            return sum(top) / n if top else 0
+
+        mine = strength(me)
+        rank = 1 + sum(1 for t in m.lg["teams"] if t["id"] != me["id"] and strength(t) > mine)
+        best = max((r for r in wv if r["pos"] == pos), key=lambda r: r["d_ros"], default=None)
+        fix = best["d_ros"] if best else 0
+        weak, strong = rank > n_teams * 2 / 3, rank <= n_teams / 3
+        if weak and fix >= 4:
+            verdict = "Fix on waivers first"
+        elif weak:
+            verdict = "Trade for an upgrade"
+        elif strong:
+            verdict = "Strength: trade from here"
+        else:
+            verdict = "Fine"
+        out.append({"pos": pos, "ppg": round(mine, 1), "rank": rank, "teams": n_teams, "weak": weak, "strong": strong,
+                    "fa": best["name"] if best else None, "fa_ppg": best["ppg"] if best else None,
+                    "fa_gain": round(fix, 1), "verdict": verdict})
+    return out
+
+
+def trades(m, me, needs=(), top=8):
+    need = {n["pos"]: n for n in needs}
     mine = m.active(me)
     my_base = m.team_value(mine)
     my_assets = [p for p in mine if m.pos(p) in SKILL and m.value(p) > 0 and p not in m.unprojected]
@@ -203,16 +235,26 @@ def trades(m, me, top=8):
                     my_new = max(([*my_new, f] for f in best_fa), key=m.team_value, default=my_new)
                     t_new = [p for p in t_new if p != t_cut]
                 my_gain, t_gain = m.team_value(my_new) - my_base, m.team_value(t_new) - t_base
-                if my_gain >= 4 and t_gain >= 1:
+                nd = need.get(m.pos(get), {})
+                wire = max(nd.get("fa_gain", 0), 0)  # what a free pickup at that position already gets you
+                edge = my_gain - wire
+                if edge >= (2 if nd.get("weak") else 3) and t_gain >= 1:
+                    gp = {m.pos(a) for a in give}
+                    score = edge * (1.6 if nd.get("weak") else 1) * (1.15 if any(need.get(p, {}).get("strong") for p in gp) else 1) \
+                        * (0.4 if any(need.get(p, {}).get("weak") for p in gp - {m.pos(get)}) else 1)
                     found.append({"partner": t["name"], "give": [card(m, a) for a in give], "get": [card(m, get)],
+                                  "edge": round(edge, 1), "wire": round(wire, 1), "wire_name": nd.get("fa") if wire >= 1 else None,
+                                  "fixes": m.pos(get) if nd.get("weak") else None, "score": score,
+                                  "from_strength": sorted(p for p in gp if need.get(p, {}).get("strong")),
+                                  "opens_hole": sorted(p for p in gp - {m.pos(get)} if need.get(p, {}).get("weak")),
                                   "my_gain": round(my_gain, 1), "their_gain": round(t_gain, 1),
                                   "give_val": round(gv, 1), "get_val": round(rv, 1)})
         seen = set()
-        for f in sorted(found, key=lambda f: -f["my_gain"]):
-            if f["get"][0]["id"] not in seen and len(seen) < 2:
+        for f in sorted(found, key=lambda f: -f["score"]):
+            if f["get"][0]["id"] not in seen and len(seen) < 3:
                 seen.add(f["get"][0]["id"])
                 ideas.append(f)
-    return sorted(ideas, key=lambda f: -f["my_gain"])[:top]
+    return sorted(ideas, key=lambda f: -f["score"])[:top]
 
 
 def buy_sell(m, me):
@@ -273,6 +315,7 @@ def build(m, trending, current_starters, sm):
         return {"error": "Could not find your team in this league."}
     opp = next((t for t in m.lg["teams"] if t["id"] == m.lg["opponents"].get(me["id"])), None)
     buy, sell = buy_sell(m, me)
+    needs = positional(m, me, waivers(m, me, trending, opp, top=60))
     dl = m.lg.get("trade_deadline")
     return {
         "league": m.lg["name"], "platform": m.lg["platform"], "team": me["name"], "record": f"{me['wins']}-{me['losses']}",
@@ -280,7 +323,7 @@ def build(m, trending, current_starters, sm):
         "deadline": dl if dl and 0 < dl < 99 else None, "trades_open": not dl or dl >= m.week or dl >= 99,
         "matchup": matchup(m, me, opp), "lineup": lineup_advice(m, me, current_starters),
         "moves": (mv := move_plan(m, me, trending, opp)),
-        "waivers": [r for r in waivers(m, me, trending, opp, top=12 + len(mv)) if r["id"] not in {x["id"] for x in mv}][:10], "trades": trades(m, me), "buy": buy, "sell": sell,
+        "waivers": [r for r in waivers(m, me, trending, opp, top=12 + len(mv)) if r["id"] not in {x["id"] for x in mv}][:10], "trades": trades(m, me, needs), "needs": needs, "buy": buy, "sell": sell,
         "power": power(m, sm), "breakouts": breakouts(m, me),
         "playoff_odds": round(sm["odds"][me["id"]], 2), "seed": round(sm["seed"][me["id"]], 1), "playoff_teams": m.lg["playoff_teams"],
         "playoff_start": m.lg["playoff_start"], "playoff_weight": round(m.week_w.get(m.lg["playoff_start"], 1.0), 2), "week_sim": sm["week"],
