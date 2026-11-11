@@ -39,5 +39,8 @@
   "odds_api_days": [
     "Sun"
   ],
-  "repo": "jmorcos3/JM-Fantasy-Football-"
+  "repo": "jmorcos3/JM-Fantasy-Football-",
+  "stream_k_def": {
+    "hold_top_n": 3
+  }
 }

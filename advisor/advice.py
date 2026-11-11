@@ -85,8 +85,12 @@ def waivers(m, me, trending, opp=None, top=12):
     out = []
     for fa in cands:
         best_drop, best_val = None, m.team_value(mine + [fa], nxt) if open_spot else -1e9
+        stream = m.stream and m.pos(fa) in ("K", "DEF")
+        same = [p for p in mine if m.pos(p) == m.pos(fa)]
+        if stream and any(p in m.hold for p in same):
+            continue  # you already hold a top-tier one: keep it, do not stream
         if not open_spot:
-            for d in mine:
+            for d in (same if stream and same else mine):  # a streamer replaces the one you have
                 if m.pos(d) not in ELIG:
                     continue  # never suggest dropping a player the model cannot value
                 v = m.team_value([p for p in mine if p != d] + [fa], nxt)
@@ -94,7 +98,7 @@ def waivers(m, me, trending, opp=None, top=12):
                     best_drop, best_val = d, v
         new = [p for p in mine if p != best_drop] + [fa]
         d_ros, d_wk = best_val - base_ros, m.lineup(new, m.week)[1] - base_wk
-        if d_ros < 0.5 and d_wk < 0.5:
+        if (d_ros < 0.5 and d_wk < 0.5) or (stream and d_wk < 0.5):
             continue
         cheap = m.pos(fa) in ("K", "DEF")  # never pay up for kickers or defences
         cap = lambda pct: min(pct, 0.02) if cheap else pct
@@ -118,11 +122,11 @@ def waivers(m, me, trending, opp=None, top=12):
                         block=block if block >= 2 else None,
                         drop=m.name(best_drop) if best_drop else None, drop_id=best_drop,
                         drop_ppg=round(m.ppg(best_drop), 1) if best_drop else None,
-                        kind="Season upgrade" if d_ros >= 5 else ("Streamer" if d_wk >= 0.5 else "Depth")))
+                        kind="Streamer" if stream else ("Season upgrade" if d_ros >= 5 else ("Streamer" if d_wk >= 0.5 else "Depth"))))
     pen = (m.lg["rules"].get("low_score_rule") or {}).get("penalty_pts", 0)
     def rank(r):
-        if r["pos"] in ("K", "DEF"):  # streamable positions: this week matters most
-            return r["d_wk"] + 0.3 * r["d_ros"] - pen * (r["bust"] or 0)
+        if r["pos"] in ("K", "DEF"):  # streamable positions: this week is what counts
+            return r["d_wk"] + (0 if m.stream else 0.3 * r["d_ros"]) - pen * (r["bust"] or 0)
         return r["d_ros"] + 0.5 * r["d_wk"] - pen * (r["bust"] or 0)
 
     out.sort(key=lambda r: -rank(r))
@@ -145,7 +149,8 @@ def move_plan(m, me, trending, opp, max_moves=4):
     try:
         for _ in range(max_moves):
             rows = [r for r in waivers(m, team, trending, opp, top=30)
-                    if (r["d_wk"] - pen * (r["bust"] or 0) * (r["d_wk"] > 0) >= 1.5 or r["d_ros"] >= 4)
+                    if (r["d_wk"] - pen * (r["bust"] or 0) * (r["d_wk"] > 0) >= (1.0 if r["pos"] in ("K", "DEF") else 1.5)
+                        or (r["d_ros"] >= 4 and not (m.stream and r["pos"] in ("K", "DEF"))))
                     and not (r["pos"] in ("K", "DEF") and r["pos"] in {x["pos"] for x in moves})]  # one streamer per spot
             if not rows:
                 break
@@ -157,7 +162,7 @@ def move_plan(m, me, trending, opp, max_moves=4):
                 why.append(f"your {hole} slot scores nothing this week without him")
             if r["d_wk"] >= 0.5:
                 why.append(f"+{r['d_wk']} pts this week")
-            if r["d_ros"] >= 0.5:
+            if r["d_ros"] >= 0.5 and not (m.stream and r["pos"] in ("K", "DEF")):
                 why.append(f"+{r['d_ros']} pts over the rest of the season")
             if r.get("block"):
                 why.append("keeps him away from this week's opponent")

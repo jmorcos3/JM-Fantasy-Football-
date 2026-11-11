@@ -45,6 +45,10 @@ the free 500/month tier. This path has not been exercised with a live key yet.
 
 ## Settings: `config.json`
 
+`stream_k_def.hold_top_n`: kickers and defences are picked on this week's projection only and replace the one you hold,
+unless yours is top-N for the rest of the season, in which case it is kept.
+
+
 Leagues are listed in priority order. For ESPN, `my_team` is any part of your team name.
 
 ## Private ESPN leagues

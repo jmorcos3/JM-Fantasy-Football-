@@ -107,6 +107,13 @@ class Model:
                     self.ros[pid] = self.ros.get(pid, 0) + v
                     self.games[pid] = self.games.get(pid, 0) + 1
 
+        # streaming rule for kickers / defences: only this week counts unless the one you hold is elite
+        self.hold = set()
+        n = (cfg.get("stream_k_def") or {}).get("hold_top_n")
+        self.stream = n is not None
+        for pos in ("K", "DEF"):
+            ranked = sorted((p for p in self.ros if self.pos(p) == pos), key=lambda p: -self.ros[p])
+            self.hold.update(ranked[:n or 0])
         self.week_w = {w: 1.0 for w in self.weeks}  # playoff weighting, set after the season simulation
 
         # chance of a dud (score at or below a threshold) this week, for leagues that punish it
