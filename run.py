@@ -25,6 +25,10 @@ def main():
             "proj": {w: sleeper.week_rows("projections", season, w) for w in range(week, last + 1)},
             "stats": {w: sleeper.week_rows("stats", season, w) for w in range(1, week)}}
     data["photo"] = headshots.build(data["players"])
+    try:  # actual points for games already played this week
+        data["live"] = sleeper.week_rows("stats", season, week)
+    except Exception:
+        data["live"] = {}
     notes = []
     try:
         data["lines"] = markets.game_lines(season, week)
@@ -53,17 +57,14 @@ def main():
             if c["platform"] == "sleeper":
                 uid = uid or sleeper.user(cfg["sleeper_username"])["user_id"]
                 lg = sleeper.load_league(lid, uid, week)
-                starters = next((r.get("starters") for r in get_json(f"{sleeper.API}/league/{lid}/rosters", ttl=300)
-                                 if r["roster_id"] == lg["my_team"]), None)
             else:
                 lg = espn.load_league(c, season, week, data["players"])
-                starters = lg["my_starters"]
                 if lg["unmapped"]:
                     notes.append(f"{lg['name']}: could not match {len(lg['unmapped'])} ESPN players ({', '.join(lg['unmapped'][:5])}).")
                 if lg["ignored_slots"]:
                     notes.append(f"{lg['name']}: the {', '.join(lg['ignored_slots'])} slot is not modelled; set it yourself.")
             lg["rules"] = c
-            leagues.append((lg, starters))
+            leagues.append((lg, next((t["starters"] for t in lg["teams"] if t["id"] == lg["my_team"]), None)))
         except Exception as ex:
             why = "it is private: add the ESPN_S2 and ESPN_SWID secrets (see README)" if "401" in str(ex) or "403" in str(ex) else str(ex)
             notes.append(f"{c['platform'].upper()} league {lid} not loaded: {why}.")

@@ -31,7 +31,8 @@ def game_lines(season, week):
         total, spread = odds.get("overUnder"), odds.get("spread")
         for side, other in (("home", "away"), ("away", "home")):
             row = {"opp": teams[other], "home": side == "home", "kickoff": e["date"], "total": total, "spread": None,
-                   "implied": None, "done": e["status"]["type"].get("completed", False)}
+                   "implied": None, "done": e["status"]["type"].get("completed", False),
+                   "started": e["status"]["type"].get("state") in ("in", "post")}
             if total is not None and spread is not None:
                 line = spread if side == "home" else -spread  # negative = favourite
                 row["spread"] = line

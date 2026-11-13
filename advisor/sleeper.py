@@ -52,6 +52,7 @@ def load_league(league_id, my_user_id, week):
         teams.append({
             "id": r["roster_id"], "name": name, "owner": u.get("display_name", "?"),
             "players": [p for p in (r.get("players") or [])],
+            "starters": r.get("starters") or [],  # aligned to the league's lineup slots
             "reserve": r.get("reserve") or [],
             "wins": rs.get("wins", 0), "losses": rs.get("losses", 0),
             "pf": rs.get("fpts", 0) + rs.get("fpts_decimal", 0) / 100,

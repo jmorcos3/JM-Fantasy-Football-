@@ -2,14 +2,15 @@
 from html import escape as e
 
 CSS = """
-/* layout: one column of dense decision tables per league, league switcher on top */
-:root{--bg:#f3f5f2;--panel:#ffffff;--ink:#16211b;--muted:#5d6b63;--line:#d9dfd9;--accent:#0f6b4a;--accent-soft:#dcefe6;
---good:#11734b;--bad:#b3372c;--warn:#8a5a00;--warn-soft:#fbefcf;--bad-soft:#f8dedb;
+/* layout: one column of dense decision tables per league, league switcher on top.
+   palette: Miami Dolphins aqua as the accent, orange as the single pop colour, deep-sea navy for ink and dark mode */
+:root{--bg:#f1f6f7;--panel:#ffffff;--ink:#0b2a33;--muted:#557079;--line:#d3e0e3;--accent:#007f89;--accent-soft:#d6eff1;
+--pop:#fc4c02;--pop-ink:#ffffff;--good:#007a84;--bad:#c2352b;--warn:#b54300;--warn-soft:#ffe7d9;--bad-soft:#f9dedb;
 --display:"Space Grotesk",system-ui,sans-serif;--body:"Inter",system-ui,sans-serif}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1512;--panel:#16201b;--ink:#e6ede8;--muted:#93a39a;--line:#28362f;--accent:#4fd0a0;--accent-soft:#17352a;
---good:#5cd6a4;--bad:#ff8f84;--warn:#f0c060;--warn-soft:#3a2f12;--bad-soft:#41201d;color-scheme:dark}}
-:root[data-theme="dark"]{--bg:#0e1512;--panel:#16201b;--ink:#e6ede8;--muted:#93a39a;--line:#28362f;--accent:#4fd0a0;--accent-soft:#17352a;
---good:#5cd6a4;--bad:#ff8f84;--warn:#f0c060;--warn-soft:#3a2f12;--bad-soft:#41201d;color-scheme:dark}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#061c25;--panel:#0c2a36;--ink:#e3f1f3;--muted:#8fb0b8;--line:#1a4150;--accent:#2ec5ce;--accent-soft:#0d3b46;
+--pop:#ff6a2b;--pop-ink:#061c25;--good:#55d8df;--bad:#ff8f84;--warn:#ff9259;--warn-soft:#40210f;--bad-soft:#41201d;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#061c25;--panel:#0c2a36;--ink:#e3f1f3;--muted:#8fb0b8;--line:#1a4150;--accent:#2ec5ce;--accent-soft:#0d3b46;
+--pop:#ff6a2b;--pop-ink:#061c25;--good:#55d8df;--bad:#ff8f84;--warn:#ff9259;--warn-soft:#40210f;--bad-soft:#41201d;color-scheme:dark}
 [hidden]{display:none!important}
 body{background:var(--bg);color:var(--ink);font:14px/1.45 var(--body);margin:0}
 .wrap{max-width:1040px;margin:0 auto;padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:20px}
@@ -31,6 +32,7 @@ th,td{padding:8px 12px;border-bottom:1px solid var(--line);white-space:nowrap}tr
 td.n,th.n{text-align:right}td.wrapc{white-space:normal;min-width:150px}
 .p{font-weight:600}.m{color:var(--muted);font-size:12px}
 .pill{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent)}
+.pill.lock{background:none;border:1px solid var(--line);color:var(--muted)}
 .pill.w{background:var(--warn-soft);color:var(--warn)}.pill.b{background:var(--bad-soft);color:var(--bad)}
 .up{color:var(--good)}.dn{color:var(--bad)}
 .alert{background:var(--warn-soft);color:var(--warn);border-radius:10px;padding:10px 14px;font-weight:600}
@@ -46,7 +48,7 @@ details.notes{color:var(--muted);font-size:12px}details.notes summary{cursor:poi
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
 .steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
 .step{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:start;background:var(--panel);border:1px solid var(--accent);border-radius:10px;padding:12px 14px}
-.num{font:600 15px var(--display);width:26px;height:26px;border-radius:50%;background:var(--accent);color:var(--bg);display:grid;place-items:center}
+.num{font:600 15px var(--display);width:26px;height:26px;border-radius:50%;background:var(--pop);color:var(--pop-ink);display:grid;place-items:center}
 .step .body{display:flex;flex-direction:column;gap:8px;min-width:0}
 .mv{display:grid;grid-template-columns:38px 36px minmax(0,1fr);gap:8px;align-items:center}
 .verb{font:600 11px var(--body);text-transform:uppercase;letter-spacing:.06em}
@@ -114,6 +116,8 @@ def pic(r, cls=""):
 
 def who(r):
     inj = f' <span class="pill b">{e(r["inj"])}</span>' if r.get("inj") else ""
+    if r.get("locked"):
+        inj += f' <span class="pill lock">{"Final" if r.get("final") else "Locked"}</span>'
     return (f'<span class="who">{pic(r)}<span><span class="p">{e(r["name"])}</span>{inj}<br>'
             f'<span class="m">{e(str(r.get("pos") or ""))} · {e(str(r.get("team") or ""))}</span></span></span>')
 
@@ -207,7 +211,7 @@ def league(L, i):
 
     head = ["Slot", "Player", "Game", ">Proj", ">Market"] + ([f">≤{br['threshold']} pt risk"] if br else []) + ["Action"]
     note = (f' Lineup choices are penalised for the chance of scoring {br["threshold"]} or less.' if br else "")
-    h.append(f'<section><h2>Optimal lineup, week {L["week"]}</h2><div class="sub">Starters first, then bench. Market column = shift from betting-market player props.{note}</div>'
+    h.append(f'<section><h2>Optimal lineup, week {L["week"]}</h2><div class="sub">Starters first, then bench. Players whose game has started are locked in place; finished games show the real score. Market column = shift from betting-market player props.{note}</div>'
              + table(head, [lrow(r) for r in L["lineup"]["starters"] + L["lineup"]["bench"]]) + "</section>")
 
     if L["waivers"]:

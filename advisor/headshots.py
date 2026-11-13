@@ -12,7 +12,7 @@ from .http import CACHE_DIR, UA
 from .markets import norm_name
 
 SRC = "https://github.com/nflverse/nflverse-data/releases/download/players/players.csv"
-SIZE = "w_96,h_96,c_fill,g_face,f_jpg,q_70"
+SIZE = "w_96,h_96,c_thumb,g_face,f_jpg,q_75"  # tight crop on the face
 
 
 def _fetch(url, name, ttl):

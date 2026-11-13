@@ -74,6 +74,20 @@ class Model:
                 cur[pid] = (1 - mw) * cur[pid] + mw * implied
                 self.mkt_delta[pid] = cur[pid] - self.base[self.week][pid]
         self.proj[self.week] = cur
+        # games already under way: those players are locked. Finished games use the real score.
+        self.locked_teams = {t for t, l in self.lines.items() if l.get("started")}
+        done = {t for t, l in self.lines.items() if l.get("done")}
+        self.final = set()
+        live = data.get("live") or {}
+        for pid in list(cur):
+            if self.team(pid) in done:
+                cur[pid] = score(live[pid]["stats"], sc) if pid in live else 0.0
+                self.final.add(pid)
+        self.fixed = {}  # locked current starters -> the lineup slot they are stuck in
+        for t in league["teams"]:
+            for i, pid in enumerate(t.get("starters") or []):
+                if pid and pid != "0" and i < len(league["slots"]) and self.is_locked(pid):
+                    self.fixed[pid] = i
         # injuries: Rotowire does not always zero out inactive players
         hurt = {pid: (self.players.get(pid) or {}).get("injury_status") for pid in cur}
         for pid, stt in hurt.items():
@@ -155,6 +169,9 @@ class Model:
         p = self.players.get(pid) or {}
         return "DEF" if p.get("position") == "DEF" or (pid.isalpha() and len(pid) <= 3) else p.get("position")
 
+    def is_locked(self, pid):
+        return self.team(pid) in self.locked_teams
+
     def name(self, pid):
         p = self.players.get(pid) or {}
         if self.pos(pid) == "DEF":
@@ -184,9 +201,14 @@ class Model:
         used, out, total = set(), [], 0.0
         order = sorted(range(len(self.lg["slots"])), key=lambda i: len(ELIG.get(self.lg["slots"][i], ())))
         picks = {}
+        if week == self.week and self.locked_teams:
+            pre = {self.fixed[p]: p for p in pids if p in self.fixed}  # cannot be moved out
+            pool = [p for p in pool if not self.is_locked(p)]  # cannot be moved in
+        else:
+            pre = {}
         for i in order:
             elig = ELIG.get(self.lg["slots"][i], set())
-            pick = next((p for p in pool if p not in used and self.pos(p) in elig), None)
+            pick = pre[i] if i in pre else next((p for p in pool if p not in used and self.pos(p) in elig), None)
             got = pts.get(pick, 0) if pick else 0
             if pick:
                 used.add(pick)

@@ -18,7 +18,7 @@ def card(m, pid, **extra):
             "ppg": round(m.ppg(pid), 1), "ros": round(m.ros.get(pid, 0), 1), "recent": round(m.recent.get(pid, 0), 1)
             if pid in m.recent else None, "value": round(m.value(pid), 1), "opp": m.opp.get(pid) or line.get("opp"),
             "home": line.get("home"), "implied": line.get("implied"),
-            "bust": round(m.bust.get(pid, 1.0), 2) if m.bust else None, "usage": m.usage.get(pid), **extra}
+            "bust": round(m.bust.get(pid, 1.0), 2) if m.bust else None, "locked": m.is_locked(pid), "final": pid in m.final, "usage": m.usage.get(pid), **extra}
 
 
 def lineup_advice(m, me, current_starters):
@@ -29,7 +29,7 @@ def lineup_advice(m, me, current_starters):
 
     def flag(slot, p):
         """'swap' if p should replace a current starter for a real gain, 'coin' if it is a toss-up."""
-        if not cur or p in cur or wk.get(p, 0) <= 0:
+        if not cur or p in cur or wk.get(p, 0) <= 0 or m.is_locked(p):
             return None
         out = [c for c in cur if c not in starting and m.pos(c) in ELIG[slot]]
         return "swap" if not out or wk.get(p, 0) - max(wk.get(c, 0) for c in out) >= 0.5 else "coin"
@@ -42,7 +42,7 @@ def lineup_advice(m, me, current_starters):
         safe *= 1 - (m.bust.get(p, 1.0) if p else 1.0)
     return {"starters": rows, "total": round(total, 1), "any_bust": round(1 - safe, 2) if m.bust else None,
             "bench": [card(m, p, slot="IR" if p in me["reserve"] else "BN",
-                           change="sit" if p in cur and m.pos(p) in ELIG else None) for p in bench]}
+                           change="sit" if p in cur and m.pos(p) in ELIG and not m.is_locked(p) else None) for p in bench]}
 
 
 def matchup(m, me, opp):

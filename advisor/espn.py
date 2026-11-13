@@ -74,10 +74,11 @@ def load_league(cfg, season, week, players):
                         unmapped.append(pl.get("fullName"))
                     pid = f"{pl.get('fullName')} (not modelled)"
             if pid:
-                if e.get("lineupSlotId") not in (20, 21) and t["id"] not in starters:
-                    starters[t["id"]] = []
-                if e.get("lineupSlotId") not in (20, 21):
-                    starters[t["id"]].append(pid)
+                name_ = SLOT.get(e.get("lineupSlotId"))
+                row = starters.setdefault(t["id"], [None] * len(slots))
+                idx = next((i for i, sl in enumerate(slots) if sl == name_ and row[i] is None), None)
+                if idx is not None:
+                    row[idx] = pid  # aligned to the league's lineup slots
                 ids.append(pid)
                 if e.get("lineupSlotId") == 21:
                     reserve.append(pid)
@@ -85,6 +86,7 @@ def load_league(cfg, season, week, players):
         if me and (me == str(t["id"]) or me in name.lower() or me == (t.get("abbrev") or "").lower()):
             my_id = t["id"]
         teams.append({"id": t["id"], "name": name, "owner": name, "players": ids, "reserve": reserve,
+                      "starters": starters.get(t["id"], []),
                       "wins": rec.get("wins", 0), "losses": rec.get("losses", 0), "pf": rec.get("pointsFor", 0),
                       "faab_left": st["acquisitionSettings"].get("acquisitionBudget", 0)
                       - t.get("transactionCounter", {}).get("acquisitionBudgetSpent", 0)})
@@ -103,7 +105,7 @@ def load_league(cfg, season, week, players):
     ignored = sorted({n for sid, n in ((15, "DP (individual defender)"), (7, "OP"), (18, "P"), (19, "HC"))
                       if st["rosterSettings"]["lineupSlotCounts"].get(str(sid))})
     return {
-        "unmapped": unmapped, "my_starters": starters.get(my_id), "ignored_slots": ignored,
+        "unmapped": unmapped,  "ignored_slots": ignored,
         "platform": "ESPN", "id": str(lid), "name": st.get("name"), "scoring": scoring, "slots": slots, "bench": bench,
         "teams": teams, "my_team": my_id, "opponents": opp, "schedule": schedule, "history": [],
         "faab": bool(st["acquisitionSettings"].get("isUsingAcquisitionBudget")),
