@@ -29,10 +29,18 @@ def game_lines(season, week):
         teams = {t["homeAway"]: ESPN_ABBR.get(t["team"]["abbreviation"], t["team"]["abbreviation"]) for t in c["competitors"]}
         odds = (c.get("odds") or [None])[0] or {}
         total, spread = odds.get("overUnder"), odds.get("spread")
+        stt = e["status"]
+        state = stt["type"].get("state")
+        if state == "post":
+            left = 0.0
+        elif state == "in":  # share of regulation still to play
+            left = max(0.0, min(1.0, ((4 - min(stt.get("period", 1), 4)) * 900 + stt.get("clock", 0)) / 3600))
+        else:
+            left = 1.0
         for side, other in (("home", "away"), ("away", "home")):
             row = {"opp": teams[other], "home": side == "home", "kickoff": e["date"], "total": total, "spread": None,
                    "implied": None, "done": e["status"]["type"].get("completed", False),
-                   "started": e["status"]["type"].get("state") in ("in", "post")}
+                   "started": e["status"]["type"].get("state") in ("in", "post"), "left": left}
             if total is not None and spread is not None:
                 line = spread if side == "home" else -spread  # negative = favourite
                 row["spread"] = line

@@ -24,6 +24,12 @@ page of decisions: optimal lineup, waiver targets with FAAB bids, trade offers, 
 - **Waiver / trade gain** = change in your optimal-lineup points over the rest of the season, net of what a
   free streamer would score in that slot. Trades must also help the other team and be close on player value.
 
+## Live week
+
+- **Matchup board**: both lineups as currently set, with points banked, projected final and win odds. Uncertainty shrinks as games finish.
+- **Locks**: once a game kicks off its players are fixed in place; finished games use the real score.
+- It is only as live as the last rebuild, so refresh during games.
+
 ## Season layer
 
 - **Playoff odds**: 4,000 simulations of the remaining schedule using each team's weekly optimal-lineup projection.

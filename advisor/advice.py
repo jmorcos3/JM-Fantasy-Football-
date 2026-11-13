@@ -46,11 +46,42 @@ def lineup_advice(m, me, current_starters):
 
 
 def matchup(m, me, opp):
+    """Live scoreboard for the lineups as currently set: points banked, projected final, win odds."""
     if not opp:
         return None
-    a, b = m.lineup(m.active(me), m.week)[1], m.lineup(m.active(opp), m.week)[1]
-    return {"opp": opp["name"], "me": round(a, 1), "them": round(b, 1),
-            "win": round(0.5 * (1 + math.erf((a - b) / (30 * math.sqrt(2)))), 2)}  # ~30pt sd on the margin
+    wk, sd_week = m.proj[m.week], 24.0
+
+    def side(t):
+        rows, now, final, base_left, base_all = [], 0.0, 0.0, 0.0, 0.0
+        st = t.get("starters") or []
+        for i, slot in enumerate(m.lg["slots"]):
+            pid = st[i] if i < len(st) and st[i] and st[i] != "0" else None
+            if not pid:
+                rows.append({"slot": slot, "name": "Empty", "short": "Empty", "state": "empty", "pts": None, "proj": 0})
+                continue
+            line = m.lines.get(m.team(pid)) or {}
+            state = "final" if pid in m.final else ("live" if m.is_locked(pid) else "upcoming")
+            pts, proj, b = m.actual.get(pid), wk.get(pid, 0), m.base[m.week].get(pid, 0)
+            now += pts or 0
+            final += proj
+            base_all += b
+            base_left += b * line.get("left", 1.0) if line else 0
+            nm = m.name(pid)
+            rows.append({"slot": slot, "name": nm, "short": nm if m.pos(pid) == "DEF" else f"{nm[0]}. {nm.split(' ', 1)[-1]}",
+                         "img": m.photo(pid), "state": state, "pts": round(pts, 1) if pts is not None else None,
+                         "proj": round(proj, 1), "inj": m.injury(pid)})
+        left = sum(1 for r in rows if r["state"] in ("upcoming", "live"))
+        # uncertainty shrinks as projected points get banked
+        sd = sd_week * (max(base_left, 0) / base_all) ** 0.5 if base_all else 0
+        return {"name": t["name"], "rows": rows, "now": round(now, 1), "final": round(final, 1), "left": left, "sd": sd}
+
+    a, b = side(me), side(opp)
+    spread = (a["sd"] ** 2 + b["sd"] ** 2) ** 0.5
+    diff = a["final"] - b["final"]
+    win = 0.5 * (1 + math.erf(diff / (spread * math.sqrt(2)))) if spread > 0.5 else (1.0 if diff > 0 else 0.0 if diff < 0 else 0.5)
+    best = m.lineup(m.active(me), m.week)[1]
+    return {"opp": b["name"], "me": a["final"], "them": b["final"], "win": round(win, 2), "mine": a, "theirs": b,
+            "upside": round(best - a["final"], 1)}
 
 
 def _pct(d_ros, d_wk):

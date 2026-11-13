@@ -63,6 +63,18 @@ header{display:flex;flex-direction:column;gap:6px}
 .hs.ph{border:1px dashed var(--line);background:none}
 .who{display:flex;align-items:center;gap:10px;min-width:0}.who>span{min-width:0}
 .trade .who{margin-top:4px}
+.board{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.bt{display:grid;grid-template-columns:1fr 1fr;gap:12px}.bt>div{display:flex;flex-direction:column;min-width:0}.bt .r{text-align:right}
+.bt b{font:600 30px/1.1 var(--display);font-variant-numeric:tabular-nums}.lab{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+.wp{height:8px;border-radius:999px;background:var(--line);overflow:hidden}.wp span{display:block;height:100%;background:var(--accent);border-radius:999px}
+.wpl{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}.wpl b{color:var(--ink)}
+.mrow{display:grid;grid-template-columns:minmax(0,1fr) 34px minmax(0,1fr);align-items:center;gap:6px;padding-top:8px;border-top:1px solid var(--line)}
+.ms{text-align:center;font:600 10px var(--body);letter-spacing:.05em;color:var(--muted)}
+.sp{display:grid;grid-template-columns:36px minmax(0,1fr) auto;align-items:center;gap:8px;min-width:0}
+.sp.r{grid-template-columns:auto minmax(0,1fr) 36px}.sp.r .hs{order:3}.sp.r .nm{order:2;text-align:right}.sp.r .sc{order:1}
+.nm{min-width:0;font-size:13px;line-height:1.3}.nm .p{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:100%;vertical-align:bottom}
+.sc{font:600 16px var(--display);font-variant-numeric:tabular-nums}.sp.pend .sc{color:var(--muted);font-weight:400}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--pop);vertical-align:2px}
 .note{font-weight:400;font-size:12px;padding:8px 12px}
 /* phone: every table row becomes a card, so no decision column is ever off-screen */
 @media (max-width:680px){
@@ -83,6 +95,8 @@ td.wide{grid-column:1/-1}td.half{grid-column:span 2}
 td.hide-m,td:empty,td:has(>span.nil:only-child){display:none}
 .slot{display:inline-block}
 .two{grid-template-columns:1fr}
+.board{padding:12px}.bt b{font-size:26px}.sp{grid-template-columns:28px minmax(0,1fr) auto;gap:6px}.sp.r{grid-template-columns:auto minmax(0,1fr) 28px}
+.board .hs{width:28px;height:28px}.nm{font-size:12px}.nm .m{font-size:10.5px}.sc{font-size:14px}.mrow{grid-template-columns:minmax(0,1fr) 26px minmax(0,1fr);gap:4px}
 .step{grid-template-columns:auto minmax(0,1fr);gap:10px}
 .bidbox{grid-column:2;text-align:left;display:flex;gap:8px;align-items:baseline}
 .mv{grid-template-columns:36px minmax(0,1fr);align-items:start;gap:4px 10px}.mv .verb{grid-column:1/-1}
@@ -164,9 +178,7 @@ def league(L, i):
     if not L["trades_open"]:
         h.append('<div class="alert">Trade deadline has passed in this league. Waivers are the only lever left.</div>')
     mu = L.get("matchup")
-    k = [(L["record"], "Record"), (L["lineup"]["total"], f'Projected, week {L["week"]}')]
-    if mu:
-        k += [(mu["them"], f'Opponent: {e(mu["opp"])}'), (f'{round(mu["win"] * 100)}%', "Win probability")]
+    k = [(L["record"], "Record")]
     k.append((f'{round(L["playoff_odds"] * 100)}%', f'Playoff odds · avg seed {L["seed"]}'))
     ws = L.get("week_sim")
     if L.get("vp_rules") and ws:
@@ -177,6 +189,28 @@ def league(L, i):
     if L.get("faab") is not None:
         k.append((f'${L["faab"]}', "FAAB left"))
     h.append('<div class="kpis">' + "".join(f'<div class="kpi"><b>{v}</b><span>{l}</span></div>' for v, l in k) + "</div>")
+
+    if mu:
+        def cell(r, right=False):
+            if r["state"] == "empty":
+                return f'<div class="sp {"r" if right else ""}"><span class="hs ph"></span><div class="nm m">Empty</div><div class="sc m">0.0</div></div>'
+            live = r["pts"] is not None
+            big = f'{r["pts"]:.1f}' if live else f'{r["proj"]:.1f}'
+            sub = {"final": "final", "live": f'live · proj {r["proj"]:.1f}', "upcoming": "projected"}[r["state"]]
+            flag = ' <span class="dot"></span>' if r["state"] == "live" else ""
+            return (f'<div class="sp {"r" if right else ""} {"pend" if not live else ""}">{pic(r)}<div class="nm"><span class="p">{e(r["short"])}</span>{flag}'
+                    f'<br><span class="m">{sub}</span></div><div class="sc">{big}</div></div>')
+        a, b_ = mu["mine"], mu["theirs"]
+        pct = round(mu["win"] * 100)
+        rows = "".join(f'<div class="mrow">{cell(x)}<div class="ms">{e(x["slot"].replace("SUPER_FLEX", "SF").replace("_FLEX", "").replace("FLEX", "FLX"))}</div>{cell(y, True)}</div>'
+                       for x, y in zip(a["rows"], b_["rows"]))
+        tip = (f'<div class="m">Your best available lineup projects {mu["upside"]:+.1f} on top of this. See the lineup section.</div>'
+               if mu["upside"] >= 0.5 else "")
+        h.append(f'<section><h2>Matchup, week {L["week"]}</h2><div class="board">'
+                 f'<div class="bt"><div><span class="lab">{e(a["name"])}</span><b>{a["now"]:.1f}</b><span class="m">proj {a["final"]:.1f} · {a["left"]} to play</span></div>'
+                 f'<div class="r"><span class="lab">{e(b_["name"])}</span><b>{b_["now"]:.1f}</b><span class="m">proj {b_["final"]:.1f} · {b_["left"]} to play</span></div></div>'
+                 f'<div class="wp" role="img" aria-label="Win probability {pct} percent"><span style="width:{pct}%"></span></div>'
+                 f'<div class="wpl"><span><b>{pct}%</b> to win</span><span>{100 - pct}%</span></div>{rows}</div>{tip}</section>')
 
     br = L.get("bust_rule")
     steps = []

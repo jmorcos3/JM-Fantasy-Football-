@@ -76,13 +76,15 @@ class Model:
         self.proj[self.week] = cur
         # games already under way: those players are locked. Finished games use the real score.
         self.locked_teams = {t for t, l in self.lines.items() if l.get("started")}
-        done = {t for t, l in self.lines.items() if l.get("done")}
-        self.final = set()
+        self.final, self.actual = set(), {}
         live = data.get("live") or {}
         for pid in list(cur):
-            if self.team(pid) in done:
-                cur[pid] = score(live[pid]["stats"], sc) if pid in live else 0.0
-                self.final.add(pid)
+            line = self.lines.get(self.team(pid)) or {}
+            if line.get("started"):  # points banked so far + projection for the time left
+                self.actual[pid] = score(live[pid]["stats"], sc) if pid in live else 0.0
+                cur[pid] = self.actual[pid] + cur[pid] * line.get("left", 0.0)
+                if line.get("done"):
+                    self.final.add(pid)
         self.fixed = {}  # locked current starters -> the lineup slot they are stuck in
         for t in league["teams"]:
             for i, pid in enumerate(t.get("starters") or []):
