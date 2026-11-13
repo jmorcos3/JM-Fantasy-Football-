@@ -48,7 +48,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .step{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:start;background:var(--panel);border:1px solid var(--accent);border-radius:10px;padding:12px 14px}
 .num{font:600 15px var(--display);width:26px;height:26px;border-radius:50%;background:var(--accent);color:var(--bg);display:grid;place-items:center}
 .step .body{display:flex;flex-direction:column;gap:8px;min-width:0}
-.mv{display:grid;grid-template-columns:44px minmax(0,1fr);gap:8px;align-items:baseline}
+.mv{display:grid;grid-template-columns:38px 36px minmax(0,1fr);gap:8px;align-items:center}
 .verb{font:600 11px var(--body);text-transform:uppercase;letter-spacing:.06em}
 .add .verb{color:var(--good)}.drop .verb{color:var(--bad)}
 .bidbox{text-align:right}.bidbox .lab{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}.bidbox b{font:600 19px var(--display)}
@@ -57,6 +57,10 @@ header{display:flex;flex-direction:column;gap:6px}
 .btn{display:inline-block;font:600 13px var(--body);padding:9px 16px;border-radius:999px;background:var(--accent);color:var(--bg);text-decoration:none}
 .btn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .stale{color:var(--warn);font-weight:600}
+.hs{width:36px;height:36px;border-radius:50%;object-fit:cover;object-position:top;background:var(--accent-soft);flex:none;display:block}
+.hs.ph{border:1px dashed var(--line);background:none}
+.who{display:flex;align-items:center;gap:10px;min-width:0}.who>span{min-width:0}
+.trade .who{margin-top:4px}
 .note{font-weight:400;font-size:12px;padding:8px 12px}
 /* phone: every table row becomes a card, so no decision column is ever off-screen */
 @media (max-width:680px){
@@ -77,6 +81,9 @@ td.wide{grid-column:1/-1}td.half{grid-column:span 2}
 td.hide-m,td:empty,td:has(>span.nil:only-child){display:none}
 .slot{display:inline-block}
 .two{grid-template-columns:1fr}
+.step{grid-template-columns:auto minmax(0,1fr);gap:10px}
+.bidbox{grid-column:2;text-align:left;display:flex;gap:8px;align-items:baseline}
+.mv{grid-template-columns:36px minmax(0,1fr);align-items:start;gap:4px 10px}.mv .verb{grid-column:1/-1}
 }
 """
 JS = """
@@ -98,9 +105,17 @@ def sign(v, unit=""):
     return f'<span class="{c}">{v:+.1f}{unit}</span>'
 
 
+def pic(r, cls=""):
+    """Headshot (or team logo). Hidden if the image fails to load, so a miss never leaves a broken icon."""
+    if not r.get("img"):
+        return f'<span class="hs ph {cls}"></span>'
+    return f'<img class="hs" src="{e(r["img"])}" alt="" loading="lazy" width="36" height="36" onerror="this.hidden=true">'
+
+
 def who(r):
     inj = f' <span class="pill b">{e(r["inj"])}</span>' if r.get("inj") else ""
-    return f'<span class="p">{e(r["name"])}</span>{inj}<br><span class="m">{e(str(r.get("pos") or ""))} · {e(str(r.get("team") or ""))}</span>'
+    return (f'<span class="who">{pic(r)}<span><span class="p">{e(r["name"])}</span>{inj}<br>'
+            f'<span class="m">{e(str(r.get("pos") or ""))} · {e(str(r.get("team") or ""))}</span></span></span>')
 
 
 def game(r):
@@ -164,10 +179,10 @@ def league(L, i):
     for n, r in enumerate(L.get("moves") or [], 1):
         bid = f'<span class="lab">Bid</span><b>${r["bid"]}</b>' if r["bid"] is not None else '<span class="lab">Claim</span><b>#{}</b>'.format(n)
         risk = f' <span class="pill b">{round(r["bust"] * 100)}% chance of ≤{br["threshold"]}</span>' if br and (r.get("bust") or 0) >= 0.08 else ""
-        drop = (f'<div class="mv drop"><span class="verb">Drop</span><div><span class="p">{e(r["drop"])}</span><br><span class="m">{e(r["drop_why"])}</span></div></div>'
-                if r["drop"] else '<div class="mv drop"><span class="verb">Drop</span><div><span class="p">No one</span><br><span class="m">you have an open roster spot</span></div></div>')
+        drop = (f'<div class="mv drop"><span class="verb">Drop</span>{pic({"img": r.get("drop_img")})}<div><span class="p">{e(r["drop"])}</span><br><span class="m">{e(r["drop_why"])}</span></div></div>'
+                if r["drop"] else '<div class="mv drop"><span class="verb">Drop</span><span class="hs ph"></span><div><span class="p">No one</span><br><span class="m">you have an open roster spot</span></div></div>')
         steps.append(f'<li class="step"><div class="num">{n}</div><div class="body">'
-                     f'<div class="mv add"><span class="verb">Add</span><div><span class="p">{e(r["name"])}</span> <span class="m">{e(r["pos"])} · {e(r["team"])}</span>{risk}'
+                     f'<div class="mv add"><span class="verb">Add</span>{pic(r)}<div><span class="p">{e(r["name"])}</span> <span class="m">{e(r["pos"])} · {e(r["team"])}</span>{risk}'
                      f'<br><span class="m">{e(r["why"])}</span></div></div>{drop}'
                      + ('<div class="m">Then put him in your starting lineup.</div>' if r["starts"] else "") + f'</div><div class="bidbox">{bid}</div></li>')
     if steps:
@@ -232,7 +247,7 @@ def league(L, i):
                      + table(["Position", ">League rank", ">Starters / gm", "Best on waivers", "Verdict"], rows) + "</section>")
         cards = []
         for t in L["trades"]:
-            side = lambda cs: "<br>".join(f'<span class="p">{e(c["name"])}</span> <span class="m">{e(c["pos"])} · {c["ppg"]}/gm</span>' for c in cs)
+            side = lambda cs: "".join(f'<span class="who">{pic(c)}<span><span class="p">{e(c["name"])}</span><br><span class="m">{e(c["pos"])} · {c["ppg"]}/gm</span></span></span>' for c in cs)
             cards.append(f'<div class="trade"><span class="lab">With {e(t["partner"])}</span><div><span class="lab">Give</span><br>{side(t["give"])}</div>'
                          f'<div><span class="lab">Get</span><br>{side(t["get"])}</div>'
                          f'<div class="m">Your lineup {sign(t["my_gain"], " pts ROS")} · theirs {sign(t["their_gain"], " pts")}</div>'

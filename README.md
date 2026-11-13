@@ -6,6 +6,7 @@ page of decisions: optimal lineup, waiver targets with FAAB bids, trade offers, 
 ## Run it
 
     python3 run.py        # no installs needed; writes site/index.html
+    python3 run.py --embed   # also inlines headshots into site/artifact.html, for hosts that block external images
 
 ## How the numbers are built
 
@@ -16,6 +17,7 @@ page of decisions: optimal lineup, waiver targets with FAAB bids, trade offers, 
 | Player props | Kalshi prediction markets (yardage, receptions, TDs), converted to expected stat lines |
 | Game environment | DraftKings spread and total, converted to implied team totals |
 | Recent form | Last four weeks of actual points |
+| Headshots | nflverse player file (official NFL photos, resized), Sleeper thumbnails and team logos as fallback |
 
 - **This week** = 50% baseline + 50% market-implied, where a liquid market exists (`market_weight`).
 - **Future weeks** = 70% baseline + 30% recent form (`recent_form_weight`).

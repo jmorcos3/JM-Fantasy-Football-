@@ -15,6 +15,7 @@ def score(stats, scoring):
 class Model:
     def __init__(self, league, data, cfg):
         self.lg, self.players, self.week = league, data["players"], data["week"]
+        self.photo = data.get("photo") or (lambda pid: None)
         self.weeks = list(range(self.week, cfg["last_week_of_season"] + 1))
         self.lines = data["lines"]
         sc = league["scoring"]

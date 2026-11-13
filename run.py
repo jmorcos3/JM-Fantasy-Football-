@@ -5,7 +5,7 @@ import os
 import sys
 from datetime import datetime, timezone
 
-from advisor import advice, espn, markets, report, sim, sleeper
+from advisor import advice, espn, headshots, markets, report, sim, sleeper
 from advisor.http import get_json
 from advisor.model import Model
 
@@ -24,6 +24,7 @@ def main():
     data = {"week": week, "players": sleeper.players(),
             "proj": {w: sleeper.week_rows("projections", season, w) for w in range(week, last + 1)},
             "stats": {w: sleeper.week_rows("stats", season, w) for w in range(1, week)}}
+    data["photo"] = headshots.build(data["players"])
     notes = []
     try:
         data["lines"] = markets.game_lines(season, week)
@@ -84,7 +85,10 @@ def main():
     os.makedirs(os.path.join(ROOT, "site"), exist_ok=True)
     json.dump(out, open(os.path.join(ROOT, "site", "data.json"), "w"), indent=1)
     open(os.path.join(ROOT, "site", "index.html"), "w").write(report.render(out))
-    open(os.path.join(ROOT, "site", "artifact.html"), "w").write(report.fragment(out))
+    frag = report.fragment(out)
+    if "--embed" in sys.argv:  # for hosts that block external images
+        frag = headshots.embed(frag)
+    open(os.path.join(ROOT, "site", "artifact.html"), "w").write(frag)
     print("Wrote site/index.html")
 
 

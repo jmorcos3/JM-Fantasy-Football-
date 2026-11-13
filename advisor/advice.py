@@ -12,7 +12,7 @@ def card(m, pid, **extra):
     inj = m.injury(pid)
     if pid in m.unprojected:
         inj = (inj + " · " if inj else "") + "no projection, check status"
-    return {"id": pid, "name": m.name(pid), "pos": m.pos(pid), "team": m.team(pid), "inj": inj,
+    return {"id": pid, "img": m.photo(pid), "name": m.name(pid), "pos": m.pos(pid), "team": m.team(pid), "inj": inj,
             "wk": round(m.proj[m.week].get(pid, 0), 1), "base": round(m.base[m.week].get(pid, 0), 1),
             "mkt": round(m.mkt_delta[pid], 1) if pid in m.mkt_delta else None,
             "ppg": round(m.ppg(pid), 1), "ros": round(m.ros.get(pid, 0), 1), "recent": round(m.recent.get(pid, 0), 1)
@@ -121,6 +121,7 @@ def waivers(m, me, trending, opp=None, top=12):
                         rival=rival, rival_bid=rival_bid if m.lg["faab"] else None, outbid=outbid,
                         block=block if block >= 2 else None,
                         drop=m.name(best_drop) if best_drop else None, drop_id=best_drop,
+                        drop_img=m.photo(best_drop) if best_drop else None,
                         drop_ppg=round(m.ppg(best_drop), 1) if best_drop else None,
                         kind="Streamer" if stream else ("Season upgrade" if d_ros >= 5 else ("Streamer" if d_wk >= 0.5 else "Depth"))))
     pen = (m.lg["rules"].get("low_score_rule") or {}).get("penalty_pts", 0)
