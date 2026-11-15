@@ -42,5 +42,6 @@
   "repo": "jmorcos3/JM-Fantasy-Football-",
   "stream_k_def": {
     "hold_top_n": 3
-  }
+  },
+  "max_qbs": 2
 }

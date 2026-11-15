@@ -223,11 +223,15 @@ def league(L, i):
                      f'<div class="mv add"><span class="verb">Add</span>{pic(r)}<div><span class="p">{e(r["name"])}</span> <span class="m">{e(r["pos"])} · {e(r["team"])}</span>{risk}'
                      f'<br><span class="m">{e(r["why"])}</span></div></div>{drop}'
                      + ('<div class="m">Then put him in your starting lineup.</div>' if r["starts"] else "") + f'</div><div class="bidbox">{bid}</div></li>')
+    spare = ""
+    if L.get("spare_qbs"):
+        spare = (f'<div class="m">Roster spot to reclaim: {e(" and ".join(L["spare_qbs"]))} is a spare quarterback '
+                 f'({"you carry " + str(L["qb_count"]) if L["qb_count"] > 2 else "your starter has no bye left"}). First in line to drop when you need the room.</div>')
     if steps:
         h.append('<section><h2>Moves to make</h2><div class="sub">Put these claims in, in this order. Each one already accounts for the moves above it.</div>'
-                 f'<ol class="steps">{"".join(steps)}</ol></section>')
+                 f'<ol class="steps">{"".join(steps)}</ol>{spare}</section>')
     else:
-        h.append('<section><h2>Moves to make</h2><div class="sub">None. No free agent beats what you already have by enough to matter this week.</div></section>')
+        h.append('<section><h2>Moves to make</h2><div class="sub">None. No free agent beats what you already have by enough to matter this week.</div>' + spare + '</section>')
 
     def bust(r):
         v = r.get("bust")

@@ -88,6 +88,19 @@ def _pct(d_ros, d_wk):
     return min(0.5, 0.012 * max(d_ros, 0) + 0.004 * max(d_wk, 0))
 
 
+def surplus_qbs(m, mine):
+    """Quarterbacks you do not need: {pid: how strongly to prefer dropping him}.
+    Anyone beyond the roster cap, plus the backup once your starter's bye has passed."""
+    qbs = sorted((p for p in mine if m.pos(p) == "QB"), key=lambda p: -m.ros.get(p, 0))
+    if not m.max_qbs or sum(1 for s in m.lg["slots"] if s in ("QB", "SUPER_FLEX")) != 1 or len(qbs) < 2:
+        return {}
+    out = {p: 5.0 for p in qbs[m.max_qbs:]}
+    bye_done = all(m.base[w].get(qbs[0], 0) > 0 for w in m.weeks[1:])
+    if bye_done:
+        out.update({p: 1.0 for p in qbs[1:m.max_qbs] if not m.is_locked(p)})
+    return out
+
+
 def waivers(m, me, trending, opp=None, top=12):
     mine = m.active(me)
     rivals = []
@@ -102,6 +115,8 @@ def waivers(m, me, trending, opp=None, top=12):
                   default=0) if full else 0
         rivals.append((t, act, base + cut))
     urgency = 1 + (m.week - 1) / 17  # unspent budget is worth nothing after the season
+    qbs, spare = sorted((p for p in mine if m.pos(p) == "QB"), key=lambda p: -m.ros.get(p, 0)), {}
+    spare = surplus_qbs(m, mine)
     opp_now = m.lineup(m.active(opp), m.week)[1] if opp else 0
     nxt = m.week + 1
     base_wk, base_ros = m.lineup(mine, m.week)[1], m.team_value(mine, nxt)
@@ -120,12 +135,17 @@ def waivers(m, me, trending, opp=None, top=12):
         same = [p for p in mine if m.pos(p) == m.pos(fa)]
         if stream and any(p in m.hold for p in same):
             continue  # you already hold a top-tier one: keep it, do not stream
-        if not open_spot:
-            for d in (same if stream and same else mine):  # a streamer replaces the one you have
+        pool = same if stream and same else mine  # a streamer replaces the one you have
+        if m.pos(fa) == "QB" and m.max_qbs and len(qbs) >= m.max_qbs:
+            pool, force = qbs, True  # never stack quarterbacks: a new one has to replace one you hold
+        else:
+            force = False
+        if not open_spot or force:
+            for d in pool:
                 if m.pos(d) not in ELIG or m.is_locked(d):
                     continue  # cannot value him, or his game has started and he cannot be dropped
                 v = m.team_value([p for p in mine if p != d] + [fa], nxt)
-                if v > best_val:
+                if v + spare.get(d, 0) > best_val + spare.get(best_drop, 0):
                     best_drop, best_val = d, v
         new = [p for p in mine if p != best_drop] + [fa]
         d_ros, d_wk = best_val - base_ros, m.lineup(new, m.week)[1] - base_wk
@@ -363,6 +383,8 @@ def build(m, trending, current_starters, sm):
         "deadline": dl if dl and 0 < dl < 99 else None, "trades_open": not dl or dl >= m.week or dl >= 99,
         "matchup": matchup(m, me, opp), "lineup": lineup_advice(m, me, current_starters),
         "moves": (mv := move_plan(m, me, trending, opp)),
+        "spare_qbs": [m.name(p) for p in surplus_qbs(m, m.active(me))],
+        "qb_count": sum(1 for p in m.active(me) if m.pos(p) == "QB"),
         "waivers": [r for r in waivers(m, me, trending, opp, top=12 + len(mv)) if r["id"] not in {x["id"] for x in mv}][:10], "trades": trades(m, me, needs, skip=skip), "needs": needs, "buy": buy, "sell": sell,
         "power": power(m, sm), "breakouts": breakouts(m, me),
         "playoff_odds": round(sm["odds"][me["id"]], 2), "seed": round(sm["seed"][me["id"]], 1), "playoff_teams": m.lg["playoff_teams"],

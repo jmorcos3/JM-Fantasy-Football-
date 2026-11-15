@@ -131,6 +131,7 @@ class Model:
         for pos in ("K", "DEF"):
             ranked = sorted((p for p in self.ros if self.pos(p) == pos), key=lambda p: -self.ros[p])
             self.hold.update(ranked[:n or 0])
+        self.max_qbs = cfg.get("max_qbs")
         self.week_w = {w: 1.0 for w in self.weeks}  # playoff weighting, set after the season simulation
 
         # chance of a dud (score at or below a threshold) this week, for leagues that punish it

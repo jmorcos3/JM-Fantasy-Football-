@@ -53,6 +53,9 @@ the free 500/month tier. This path has not been exercised with a live key yet.
 
 ## Settings: `config.json`
 
+`max_qbs`: in one-quarterback leagues, never add a quarterback beyond this count without dropping one; the backup becomes the
+preferred drop once your starter's bye has passed.
+
 `stream_k_def.hold_top_n`: kickers and defences are picked on this week's projection only and replace the one you hold,
 unless yours is top-N for the rest of the season, in which case it is kept.
 
