@@ -122,8 +122,8 @@ def waivers(m, me, trending, opp=None, top=12):
             continue  # you already hold a top-tier one: keep it, do not stream
         if not open_spot:
             for d in (same if stream and same else mine):  # a streamer replaces the one you have
-                if m.pos(d) not in ELIG:
-                    continue  # never suggest dropping a player the model cannot value
+                if m.pos(d) not in ELIG or m.is_locked(d):
+                    continue  # cannot value him, or his game has started and he cannot be dropped
                 v = m.team_value([p for p in mine if p != d] + [fa], nxt)
                 if v > best_val:
                     best_drop, best_val = d, v
