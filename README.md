@@ -20,7 +20,9 @@ page of decisions: optimal lineup, waiver targets with FAAB bids, trade offers, 
 | Headshots | nflverse player file (official NFL photos, resized), Sleeper thumbnails and team logos as fallback |
 
 - **This week** = 50% baseline + 50% market-implied, where a liquid market exists (`market_weight`).
-- **Future weeks** = 70% baseline + 30% recent form (`recent_form_weight`).
+- **Future weeks** = 80% baseline + 20% recent form (`recent_form_weight`), where recent form keeps yards and volume but resets
+  touchdowns to a normal rate for that workload, so a scoring streak is not projected forward.
+- **Looking ahead**: byes in the next two weeks, your lineup strength in the playoff weeks, and free agents to stash for them.
 - **Waiver / trade gain** = change in your optimal-lineup points over the rest of the season, net of what a
   free streamer would score in that slot. Trades must also help the other team and be close on player value.
 

@@ -12,7 +12,7 @@ def card(m, pid, **extra):
     inj = m.injury(pid)
     if pid in m.unprojected:
         inj = (inj + " · " if inj else "") + "no projection, check status"
-    return {"id": pid, "img": m.photo(pid), "name": m.name(pid), "pos": m.pos(pid), "team": m.team(pid), "inj": inj,
+    return {"id": pid, "img": m.photo(pid), "po": round(m.playoff_ppg(pid), 1), "byes": m.byes(pid), "name": m.name(pid), "pos": m.pos(pid), "team": m.team(pid), "inj": inj,
             "wk": round(m.proj[m.week].get(pid, 0), 1), "base": round(m.base[m.week].get(pid, 0), 1),
             "mkt": round(m.mkt_delta[pid], 1) if pid in m.mkt_delta else None,
             "ppg": round(m.ppg(pid), 1), "ros": round(m.ros.get(pid, 0), 1), "recent": round(m.recent.get(pid, 0), 1)
@@ -311,7 +311,12 @@ def trades(m, me, needs=(), top=8, skip=()):
             if f["get"][0]["id"] not in seen and len(seen) < 3:
                 seen.add(f["get"][0]["id"])
                 ideas.append(f)
-    return sorted(ideas, key=lambda f: -f["score"])[:top]
+    ideas = sorted(ideas, key=lambda f: -f["score"])[:top]
+    po = [w for w in m.weeks if w >= m.lg["playoff_start"]]
+    for f in ideas:  # what the deal does to your lineup in the playoff weeks specifically
+        new = [p for p in mine if p not in {c["id"] for c in f["give"]}] + [c["id"] for c in f["get"]]
+        f["po_gain"] = round(sum(m.lineup(new, w, floor=True)[1] - m.lineup(mine, w, floor=True)[1] for w in po) / len(po), 1) if po else None
+    return ideas
 
 
 def buy_sell(m, me, skip=()):
@@ -345,6 +350,47 @@ def breakouts(m, me, n=8):
         rows.append(card(m, pid, status="Your roster" if who else "Free agent", snap=round(u["snap"] * 100),
                          d_snap=round(u["d_snap"] * 100), opps=round(u["opp"], 1), d_opp=round(u["d_opp"], 1)))
     return sorted(rows, key=lambda r: -(r["d_snap"] + 3 * r["d_opp"]))[:n]
+
+
+def lookahead(m, me):
+    """What is coming: byes in the next two weeks, your playoff-week strength, and stashes for those weeks."""
+    mine = m.active(me)
+    byes = []
+    for w in m.weeks[1:3]:
+        best = {p for wk in m.weeks[3:4] or m.weeks[-1:] for _, p, _ in m.lineup(mine, wk)[0] if p}
+        core = sorted((p for p in mine if m.base[w].get(p, 0) <= 0 and w in m.byes(p) and (p in best or m.value(p) > 5)),
+                      key=lambda p: -m.ppg(p))
+        if core:
+            slots, total = m.lineup(mine, w)
+            holes = [s for s, p, pts in slots if pts <= 0.85 * max(m.repl.get(x, 0) for x in ELIG[s])]
+            byes.append({"week": w, "players": [m.name(p) for p in core], "proj": round(total, 1), "holes": holes})
+    po = [w for w in m.weeks if w >= m.lg["playoff_start"]]
+    rank = strength = None
+    stash = []
+    if po:
+        avg = lambda t: sum(m.lineup(m.active(t), w, floor=True)[1] for w in po) / len(po)
+        strength = avg(me)
+        rank = 1 + sum(1 for t in m.lg["teams"] if t["id"] != me["id"] and avg(t) > strength)
+        base = sum(m.lineup(mine, w, floor=True)[1] for w in po)
+        full = len(mine) >= len(m.lg["slots"]) + m.lg["bench"]
+        spare = surplus_qbs(m, mine)
+        cands = sorted((p for p in m.free if m.pos(p) in SKILL), key=lambda p: -m.playoff_ppg(p))[:20]
+        for fa in cands:
+            best_v, best_d = (sum(m.lineup(mine + [fa], w, floor=True)[1] for w in po), None) if not full else (-1e9, None)
+            if full:
+                for d in mine:
+                    if m.pos(d) not in ELIG or m.is_locked(d):
+                        continue
+                    v = sum(m.lineup([p for p in mine if p != d] + [fa], w, floor=True)[1] for w in po) + spare.get(d, 0)
+                    if v > best_v:
+                        best_v, best_d = v, d
+                best_v -= spare.get(best_d, 0)
+            gain = (best_v - base) / len(po)
+            if gain >= 0.7 and m.playoff_ppg(fa) - m.proj[m.week].get(fa, 0) >= -1:
+                stash.append(card(m, fa, po_gain=round(gain, 1), drop=m.name(best_d) if best_d else None))
+        stash = sorted(stash, key=lambda r: -r["po_gain"])[:4]
+    return {"byes": byes, "po_weeks": po, "po_strength": round(strength, 1) if strength else None, "po_rank": rank,
+            "teams": len(m.lg["teams"]), "stash": stash}
 
 
 def power(m, sm):
@@ -387,6 +433,7 @@ def build(m, trending, current_starters, sm):
         "qb_count": sum(1 for p in m.active(me) if m.pos(p) == "QB"),
         "waivers": [r for r in waivers(m, me, trending, opp, top=12 + len(mv)) if r["id"] not in {x["id"] for x in mv}][:10], "trades": trades(m, me, needs, skip=skip), "needs": needs, "buy": buy, "sell": sell,
         "power": power(m, sm), "breakouts": breakouts(m, me),
+        "ahead": lookahead(m, me),
         "playoff_odds": round(sm["odds"][me["id"]], 2), "seed": round(sm["seed"][me["id"]], 1), "playoff_teams": m.lg["playoff_teams"],
         "playoff_start": m.lg["playoff_start"], "playoff_weight": round(m.week_w.get(m.lg["playoff_start"], 1.0), 2), "week_sim": sm["week"],
         "vp": sm["now"][me["id"]]["vp"] if sm["vp"] else None, "vp_rules": m.lg["rules"].get("victory_points"),

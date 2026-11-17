@@ -75,6 +75,7 @@ header{display:flex;flex-direction:column;gap:6px}
 .nm{min-width:0;font-size:13px;line-height:1.3}.nm .p{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:100%;vertical-align:bottom}
 .sc{font:600 16px var(--display);font-variant-numeric:tabular-nums}.sp.pend .sc{color:var(--muted);font-weight:400}
 .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--pop);vertical-align:2px}
+.ahead{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
 .note{font-weight:400;font-size:12px;padding:8px 12px}
 /* phone: every table row becomes a card, so no decision column is ever off-screen */
 @media (max-width:680px){
@@ -145,7 +146,7 @@ def game(r):
 
 MAIN = {"Player", "Team", "Buy low", "Sell high", "Position"}
 WIDE = {"Action", "Owner", "Best on waivers", "Verdict"}
-KEY = {"League rank", "Proj", "Bid", "Playoff odds", "Outlook / gm", "Shift", "Snap share"}
+KEY = {"League rank", "Playoff gain / wk", "Proj", "Bid", "Playoff odds", "Outlook / gm", "Shift", "Snap share"}
 HIDE = {"Slot", "#"}
 HALF = {"Game", "Competition", "Would replace", "Status"}
 
@@ -247,6 +248,26 @@ def league(L, i):
             cells.append(td(bust(r) if r.get("team") else '<span class="pill b">100%</span>', 1))
         return cells + [td(FLAG.get(r.get("change"), ""))]
 
+    ah = L.get("ahead") or {}
+    if ah:
+        bits = []
+        for b in ah["byes"]:
+            hole = f' Leaves {", ".join(b["holes"])} below replacement level; line up cover now.' if b["holes"] else " Your depth covers it."
+            bits.append(f'<li><b>Week {b["week"]} byes:</b> {e(", ".join(b["players"]))}. Lineup projects {b["proj"]}.{hole}</li>')
+        if not ah["byes"]:
+            bits.append("<li><b>Byes:</b> no key players off in the next two weeks.</li>")
+        if ah.get("po_rank"):
+            wk = ah["po_weeks"]
+            bits.append(f'<li><b>Playoff weeks ({wk[0]}–{wk[-1]}):</b> your lineup projects {ah["po_strength"]} a week, '
+                        f'{ah["po_rank"]} of {ah["teams"]} in the league.</li>')
+        stash = ""
+        if ah.get("stash"):
+            rows = [[td(who(r)), td(r["wk"], 1), td(r["po"], 1), td(sign(r["po_gain"]), 1),
+                     td(e(r["drop"]) if r["drop"] else '<span class="m">open spot</span>')] for r in ah["stash"]]
+            stash = ('<div class="sub">Stashes: free agents worth more in the playoff weeks than they are today.</div>'
+                     + table(["Player", ">This week", ">Playoff wks / gm", ">Playoff gain / wk", "Would replace"], rows))
+        h.append(f'<section><h2>Looking ahead</h2><ul class="ahead">{"".join(bits)}</ul>{stash}</section>')
+
     head = ["Slot", "Player", "Game", ">Proj", ">Market"] + ([f">≤{br['threshold']} pt risk"] if br else []) + ["Action"]
     note = (f' Lineup choices are penalised for the chance of scoring {br["threshold"]} or less.' if br else "")
     h.append(f'<section><h2>Optimal lineup, week {L["week"]}</h2><div class="sub">Starters first, then bench. Players whose game has started are locked in place; finished games show the real score. Market column = shift from betting-market player props.{note}</div>'
@@ -289,10 +310,11 @@ def league(L, i):
                      + table(["Position", ">League rank", ">Starters / gm", "Best on waivers", "Verdict"], rows) + "</section>")
         cards = []
         for t in L["trades"]:
-            side = lambda cs: "".join(f'<span class="who">{pic(c)}<span><span class="p">{e(c["name"])}</span><br><span class="m">{e(c["pos"])} · {c["ppg"]}/gm</span></span></span>' for c in cs)
+            side = lambda cs: "".join(f'<span class="who">{pic(c)}<span><span class="p">{e(c["name"])}</span><br><span class="m">{e(c["pos"])} · {c["ppg"]}/gm · playoffs {c["po"]}</span></span></span>' for c in cs)
             cards.append(f'<div class="trade"><span class="lab">With {e(t["partner"])}</span><div><span class="lab">Give</span><br>{side(t["give"])}</div>'
                          f'<div><span class="lab">Get</span><br>{side(t["get"])}</div>'
                          f'<div class="m">Your lineup {sign(t["my_gain"], " pts ROS")} · theirs {sign(t["their_gain"], " pts")}</div>'
+                         + (f'<div class="m">Playoff weeks: {sign(t["po_gain"], " a week")}</div>' if t.get("po_gain") is not None else "")
                          + (f'<div class="m">{sign(t["edge"], " pts")} more than adding {e(t["wire_name"])} off waivers</div>' if t.get("wire_name") else "")
                          + '<div>' + (f'<span class="pill w">Fixes weak {e(t["fixes"])}</span> ' if t.get("fixes") else "")
                          + "".join(f'<span class="pill">From {e(p)} surplus</span> ' for p in t.get("from_strength", []))
@@ -343,7 +365,7 @@ def fragment(out):
             + '</header>'
             f'<div class="bar"><div class="tabs" role="tablist">{tabs}</div></div>{notes}' + "".join(league(L, i) for i, L in enumerate(out["leagues"]))
             + '<footer>Projections: Rotowire weekly stat lines re-scored with each league\'s own rules, blended 50/50 with stat lines implied by Kalshi '
-              'player-prop markets where a liquid market exists, and nudged toward the last four weeks of actual production for future weeks. '
+              'player-prop markets where a liquid market exists, and nudged toward the last four weeks of volume (touchdowns reset to a normal rate, so streaks are not projected forward). '
               'Team totals are DraftKings lines. Trade and waiver gains are changes in your optimal-lineup points, net of what a free streamer would give you.</footer>'
             f'</div><script>{JS}</script>')
 

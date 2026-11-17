@@ -21,8 +21,10 @@ class Model:
         sc = league["scoring"]
         mw, rf = cfg["market_weight"], cfg["recent_form_weight"]
 
-        # recent form: actual points per game over the last 4 weeks
-        self.recent, self.recent_gp = {}, {}
+        # recent form over the last 4 weeks. `recent` is what actually happened; `xrecent` is the
+        # repeatable part: same yards and volume, but touchdowns reset to a normal rate for that
+        # workload, so a scoring streak does not get projected forward.
+        self.recent, self.recent_gp, xr = {}, {}, {}
         for w, rows in data["stats"].items():
             if w < self.week - 4:
                 continue
@@ -31,7 +33,14 @@ class Model:
                 if st.get("gp") or st.get("off_snp") or self.pos(pid) == "DEF":
                     self.recent[pid] = self.recent.get(pid, 0) + score(st, sc)
                     self.recent_gp[pid] = self.recent_gp.get(pid, 0) + 1
+                    flat = dict(st)
+                    if self.pos(pid) in ("QB", "RB", "WR", "TE"):
+                        flat["rush_td"] = 0.03 * (st.get("rush_att") or 0)
+                        flat["rec_td"] = 0.045 * (st.get("rec_tgt") or 0)
+                        flat["pass_td"] = 0.045 * (st.get("pass_att") or 0)
+                    xr[pid] = xr.get(pid, 0) + score(flat, sc)
         self.recent = {p: v / self.recent_gp[p] for p, v in self.recent.items()}
+        self.xrecent = {p: v / self.recent_gp[p] for p, v in xr.items()}
 
         # usage trend: snap share and opportunities (carries + targets), last 2 games vs the 2 before
         self.usage = {}
@@ -100,7 +109,7 @@ class Model:
             self.proj[w] = {}
             for pid, v in self.base[w].items():
                 if v > 0 and self.recent_gp.get(pid, 0) >= 2:
-                    v = (1 - rf) * v + rf * self.recent[pid]
+                    v = (1 - rf) * v + rf * self.xrecent[pid]
                 u = self.usage.get(pid)
                 if u and self.pos(pid) in ("RB", "WR", "TE"):
                     v *= 1 + max(-0.1, min(0.1, 0.5 * u["d_snap"]))  # role growing or shrinking
@@ -189,6 +198,17 @@ class Model:
 
     def ppg(self, pid):
         return self.ros.get(pid, 0) / self.games[pid] if self.games.get(pid) else 0
+
+    def playoff_ppg(self, pid):
+        """Average projection across the league's playoff weeks."""
+        wks = [w for w in self.weeks if w >= self.lg["playoff_start"]]
+        return sum(self.proj[w].get(pid, 0) for w in wks) / len(wks) if wks else 0.0
+
+    def byes(self, pid, ahead=3):
+        """Upcoming weeks (not this one) where a healthy player has no game."""
+        if self.injury(pid) in ("Out", "IR", "PUP", "NFI", "Sus") or pid in self.unprojected:
+            return []
+        return [w for w in self.weeks[1:1 + ahead] if self.base[w].get(pid, 0) <= 0 and self.ros.get(pid, 0) > 0]
 
     def value(self, pid):
         """Trade value: rest-of-season points above waiver-wire replacement."""
