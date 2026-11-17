@@ -26,6 +26,14 @@ page of decisions: optimal lineup, waiver targets with FAAB bids, trade offers, 
 - **Waiver / trade gain** = change in your optimal-lineup points over the rest of the season, net of what a
   free streamer would score in that slot. Trades must also help the other team and be close on player value.
 
+## What has been tested
+
+- **Defence-vs-position matchups** (points each defence allows to a position, weeks 5-10 of 2026, 869 player-games):
+  no predictive value on top of the baseline projections (coefficient about zero, t = -0.1). The baseline already prices the
+  matchup in, so the dashboard shows matchup ranks as context and does not adjust projections for them.
+- **Baseline bias**: projections ran about 0.45 points high on average over that sample (tight ends about 1.0 high).
+  Not yet large or stable enough to correct for.
+
 ## Live week
 
 - **Matchup board**: both lineups as currently set, with points banked, projected final and win odds. Uncertainty shrinks as games finish.

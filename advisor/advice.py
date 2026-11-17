@@ -12,7 +12,7 @@ def card(m, pid, **extra):
     inj = m.injury(pid)
     if pid in m.unprojected:
         inj = (inj + " · " if inj else "") + "no projection, check status"
-    return {"id": pid, "img": m.photo(pid), "po": round(m.playoff_ppg(pid), 1), "byes": m.byes(pid), "name": m.name(pid), "pos": m.pos(pid), "team": m.team(pid), "inj": inj,
+    return {"id": pid, "dvp": m.dvp.get((m.opp.get(pid) or line.get("opp"), m.pos(pid))), "img": m.photo(pid), "po": round(m.playoff_ppg(pid), 1), "byes": m.byes(pid), "name": m.name(pid), "pos": m.pos(pid), "team": m.team(pid), "inj": inj,
             "wk": round(m.proj[m.week].get(pid, 0), 1), "base": round(m.base[m.week].get(pid, 0), 1),
             "mkt": round(m.mkt_delta[pid], 1) if pid in m.mkt_delta else None,
             "ppg": round(m.ppg(pid), 1), "ros": round(m.ros.get(pid, 0), 1), "recent": round(m.recent.get(pid, 0), 1)

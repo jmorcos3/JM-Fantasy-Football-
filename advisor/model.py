@@ -60,6 +60,27 @@ class Model:
                 self.usage[pid] = {"snap": avg(new, 0), "d_snap": avg(new, 0) - avg(old, 0),
                                    "opp": avg(new, 1), "d_opp": avg(new, 1) - avg(old, 1)}
 
+        # defence vs position: fantasy points each defence has allowed to QB/RB/WR/TE this season, relative
+        # to league average (shrunk toward 1.0). Shown as context only: a backtest on this season's data
+        # found no predictive value beyond the baseline projections, which already price the matchup in.
+        allowed = {}
+        for w, rows in data["stats"].items():
+            for pid, r in rows.items():
+                p_, st = self.pos(pid), r["stats"]
+                if p_ in ("QB", "RB", "WR", "TE") and r.get("opp") and (st.get("off_snp") or st.get("gp")):
+                    allowed.setdefault((r["opp"], p_), {}).setdefault(w, 0.0)
+                    allowed[(r["opp"], p_)][w] += score(st, sc)
+        self.dvp = {}
+        for p_ in ("QB", "RB", "WR", "TE"):
+            teams = {d: list(v.values()) for (d, pp), v in allowed.items() if pp == p_}
+            games = sum(len(v) for v in teams.values())
+            if not games:
+                continue
+            lg_avg = sum(sum(v) for v in teams.values()) / games
+            ratio = {d: ((sum(v) + 3 * lg_avg) / (len(v) + 3)) / lg_avg for d, v in teams.items()}
+            for rank, d in enumerate(sorted(ratio, key=ratio.get, reverse=True), 1):  # 1 = softest
+                self.dvp[(d, p_)] = {"ratio": round(ratio[d], 2), "rank": rank, "of": len(ratio)}
+
         self.base, self.proj, self.mkt_delta, self.opp = {}, {}, {}, {}
         name_idx = {}
         for w in self.weeks:

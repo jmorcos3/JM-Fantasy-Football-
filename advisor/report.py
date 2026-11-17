@@ -141,14 +141,20 @@ def game(r):
     if not r.get("opp"):
         return '<span class="m">bye / no game</span>'
     tot = f' <span class="m">· team total {r["implied"]}</span>' if r.get("implied") else ""
-    return f'{"vs" if r.get("home") else "@"} {e(r["opp"])}{tot}'
+    d, mt = r.get("dvp"), ""
+    if d and abs(d["ratio"] - 1) >= 0.08:
+        soft = d["ratio"] > 1
+        mt = (f'<br><span class="{"up" if soft else "dn"}">{"Soft" if soft else "Tough"} matchup</span> '
+              f'<span class="m">· {e(r["opp"])} allow {abs(round((d["ratio"] - 1) * 100))}% {"more" if soft else "less"} to {e(str(r.get("pos")))}s, '
+              f'#{d["rank"]} of {d["of"]}</span>')
+    return f'{"vs" if r.get("home") else "@"} {e(r["opp"])}{tot}{mt}'
 
 
 MAIN = {"Player", "Team", "Buy low", "Sell high", "Position"}
-WIDE = {"Action", "Owner", "Best on waivers", "Verdict"}
+WIDE = {"Game", "Action", "Owner", "Best on waivers", "Verdict"}
 KEY = {"League rank", "Playoff gain / wk", "Proj", "Bid", "Playoff odds", "Outlook / gm", "Shift", "Snap share"}
 HIDE = {"Slot", "#"}
-HALF = {"Game", "Competition", "Would replace", "Status"}
+HALF = { "Competition", "Would replace", "Status"}
 
 
 def table(head, rows, cls=None):
@@ -270,7 +276,7 @@ def league(L, i):
 
     head = ["Slot", "Player", "Game", ">Proj", ">Market"] + ([f">≤{br['threshold']} pt risk"] if br else []) + ["Action"]
     note = (f' Lineup choices are penalised for the chance of scoring {br["threshold"]} or less.' if br else "")
-    h.append(f'<section><h2>Optimal lineup, week {L["week"]}</h2><div class="sub">Starters first, then bench. Players whose game has started are locked in place; finished games show the real score. Market column = shift from betting-market player props.{note}</div>'
+    h.append(f'<section><h2>Optimal lineup, week {L["week"]}</h2><div class="sub">Starters first, then bench. Players whose game has started are locked in place; finished games show the real score. Market column = shift from betting-market player props. Matchup notes rank how many fantasy points that defence has allowed to the position this season (#1 = most).{note}</div>'
              + table(head, [lrow(r) for r in L["lineup"]["starters"] + L["lineup"]["bench"]]) + "</section>")
 
     if L["waivers"]:
