@@ -75,6 +75,7 @@ def main():
         m = Model(lg, data, cfg)
         season_sim = sim.run(m, cfg)
         p_playoffs = season_sim["odds"].get(lg["my_team"], 0)
+        m.playoff_odds = p_playoffs
         if cfg.get("playoff_weighting"):
             for w in m.weeks:  # playoff weeks count for more the likelier you are to be playing in them
                 if w >= lg["playoff_start"]:

@@ -76,6 +76,7 @@ header{display:flex;flex-direction:column;gap:6px}
 .sc{font:600 16px var(--display);font-variant-numeric:tabular-nums}.sp.pend .sc{color:var(--muted);font-weight:400}
 .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--pop);vertical-align:2px}
 .ahead{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+.tri{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted)}.tri b{color:var(--ink);font-family:var(--display);font-size:14px}
 .note{font-weight:400;font-size:12px;padding:8px 12px}
 /* phone: every table row becomes a card, so no decision column is ever off-screen */
 @media (max-width:680px){
@@ -226,16 +227,20 @@ def league(L, i):
         risk = f' <span class="pill b">{round(r["bust"] * 100)}% chance of ≤{br["threshold"]}</span>' if br and (r.get("bust") or 0) >= 0.08 else ""
         drop = (f'<div class="mv drop"><span class="verb">Drop</span>{pic({"img": r.get("drop_img")})}<div><span class="p">{e(r["drop"])}</span><br><span class="m">{e(r["drop_why"])}</span></div></div>'
                 if r["drop"] else '<div class="mv drop"><span class="verb">Drop</span><span class="hs ph"></span><div><span class="p">No one</span><br><span class="m">you have an open roster spot</span></div></div>')
+        streamer = r["pos"] in ("K", "DEF")
+        nums = (f'<div class="tri"><span><b>{r["d_wk"]:+.1f}</b> this week</span>'
+                + ("" if streamer else f'<span><b>{r["d_ros"]:+.1f}</b> rest of season</span><span><b>{r["po_gain"]:+.1f}</b>/wk in playoffs</span>')
+                + '</div>')
         steps.append(f'<li class="step"><div class="num">{n}</div><div class="body">'
                      f'<div class="mv add"><span class="verb">Add</span>{pic(r)}<div><span class="p">{e(r["name"])}</span> <span class="m">{e(r["pos"])} · {e(r["team"])}</span>{risk}'
-                     f'<br><span class="m">{e(r["why"])}</span></div></div>{drop}'
+                     f'<br><span class="m">{e(r["why"])}</span></div></div>{nums}{drop}'
                      + ('<div class="m">Then put him in your starting lineup.</div>' if r["starts"] else "") + f'</div><div class="bidbox">{bid}</div></li>')
     spare = ""
     if L.get("spare_qbs"):
         spare = (f'<div class="m">Roster spot to reclaim: {e(" and ".join(L["spare_qbs"]))} is a spare quarterback '
                  f'({"you carry " + str(L["qb_count"]) if L["qb_count"] > 2 else "your starter has no bye left"}). First in line to drop when you need the room.</div>')
     if steps:
-        h.append('<section><h2>Moves to make</h2><div class="sub">Put these claims in, in this order. Each one already accounts for the moves above it.</div>'
+        h.append('<section><h2>Moves to make</h2><div class="sub">Put these claims in, in this order. Each one already accounts for the moves above it, and is judged on this week, the rest of the season and the playoff weeks. Bench depth is counted as injury cover, so the drop is the player you can best afford to lose.</div>'
                  f'<ol class="steps">{"".join(steps)}</ol>{spare}</section>')
     else:
         h.append('<section><h2>Moves to make</h2><div class="sub">None. No free agent beats what you already have by enough to matter this week.</div>' + spare + '</section>')

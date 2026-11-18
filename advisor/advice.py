@@ -115,6 +115,15 @@ def waivers(m, me, trending, opp=None, top=12):
                   default=0) if full else 0
         rivals.append((t, act, base + cut))
     urgency = 1 + (m.week - 1) / 17  # unspent budget is worth nothing after the season
+    po_weeks = [w for w in m.weeks if w >= m.lg["playoff_start"]]
+
+    def cover(d):
+        """Insurance value of a bench player: a share of his own remaining points, playoff weeks weighted,
+        since depth is what you fall back on when a starter gets hurt."""
+        if d is None or m.pos(d) not in SKILL or m.pos(d) == "QB":
+            return 0.0
+        return 0.06 * sum(m.week_w[w] * m.proj[w].get(d, 0) for w in m.weeks[1:])
+
     qbs, spare = sorted((p for p in mine if m.pos(p) == "QB"), key=lambda p: -m.ros.get(p, 0)), {}
     spare = surplus_qbs(m, mine)
     opp_now = m.lineup(m.active(opp), m.week)[1] if opp else 0
@@ -145,7 +154,7 @@ def waivers(m, me, trending, opp=None, top=12):
                 if m.pos(d) not in ELIG or m.is_locked(d):
                     continue  # cannot value him, or his game has started and he cannot be dropped
                 v = m.team_value([p for p in mine if p != d] + [fa], nxt)
-                if v + spare.get(d, 0) > best_val + spare.get(best_drop, 0):
+                if v + spare.get(d, 0) - cover(d) > best_val + spare.get(best_drop, 0) - cover(best_drop):
                     best_drop, best_val = d, v
         new = [p for p in mine if p != best_drop] + [fa]
         d_ros, d_wk = best_val - base_ros, m.lineup(new, m.week)[1] - base_wk
@@ -167,8 +176,11 @@ def waivers(m, me, trending, opp=None, top=12):
             ceiling = max(1, round(cap(_pct(d_ros, d_wk) * urgency * (1.25 if fa in hot else 1)) * me["faab_left"])) if me["faab_left"] > 0 else 0
             target = round(rival_bid * 1.15) + 1 if want else 1  # pay just enough to clear the top rival
             bid, outbid = min(ceiling, target), target > ceiling and not cheap
+        po_gain = (sum(m.lineup(new, w, floor=True)[1] - m.lineup(mine, w, floor=True)[1] for w in po_weeks) / len(po_weeks)
+                   if po_weeks else 0.0)
         block = round(m.lineup(m.active(opp) + [fa], m.week)[1] - opp_now, 1) if opp else 0
-        out.append(card(m, fa, d_ros=round(d_ros, 1), d_wk=round(d_wk, 1), bid=bid, hot=fa in hot, want=want,
+        out.append(card(m, fa, d_ros=round(d_ros, 1), d_wk=round(d_wk, 1), po_gain=round(po_gain, 1),
+                        depth_cost=round(cover(best_drop), 1), bid=bid, hot=fa in hot, want=want,
                         rival=rival, rival_bid=rival_bid if m.lg["faab"] else None, outbid=outbid,
                         block=block if block >= 2 else None,
                         drop=m.name(best_drop) if best_drop else None, drop_id=best_drop,
@@ -179,7 +191,8 @@ def waivers(m, me, trending, opp=None, top=12):
     def rank(r):
         if r["pos"] in ("K", "DEF"):  # streamable positions: this week is what counts
             return r["d_wk"] + (0 if m.stream else 0.3 * r["d_ros"]) - pen * (r["bust"] or 0)
-        return r["d_ros"] + 0.5 * r["d_wk"] - pen * (r["bust"] or 0)
+        contend = 2.0 * r["po_gain"] if m.playoff_odds >= 0.5 else 0.0  # contenders: playoff weeks count extra
+        return r["d_ros"] + 0.5 * r["d_wk"] + contend - r["depth_cost"] - pen * (r["bust"] or 0)
 
     out.sort(key=lambda r: -rank(r))
     keep, n = [], {}
@@ -200,10 +213,22 @@ def move_plan(m, me, trending, opp, max_moves=4):
     team, free0, moves = dict(me, players=list(me["players"])), list(m.free), []
     try:
         for _ in range(max_moves):
-            rows = [r for r in waivers(m, team, trending, opp, top=30)
-                    if (r["d_wk"] - pen * (r["bust"] or 0) * (r["d_wk"] > 0) >= (1.0 if r["pos"] in ("K", "DEF") else 1.5)
-                        or (r["d_ros"] >= 4 and not (m.stream and r["pos"] in ("K", "DEF"))))
-                    and not (r["pos"] in ("K", "DEF") and r["pos"] in {x["pos"] for x in moves})]  # one streamer per spot
+            contender = m.playoff_odds >= 0.5
+
+            def worth(r):
+                cheap = r["pos"] in ("K", "DEF")
+                if cheap and r["pos"] in {x["pos"] for x in moves}:
+                    return False  # one streamer per spot
+                now = r["d_wk"] - pen * (r["bust"] or 0) * (r["d_wk"] > 0)
+                if cheap:
+                    return now >= 1.0 if m.stream else (now >= 1.0 or r["d_ros"] >= 4)
+                # a contender does not sell playoff-week strength for a small bump today
+                if contender and r["po_gain"] < -0.3 and r["d_wk"] < 4:
+                    return False
+                season = r["d_ros"] - r["depth_cost"]
+                return now >= 1.5 and season >= 0 or season >= 4 or (contender and r["po_gain"] >= 1.0)
+
+            rows = [r for r in waivers(m, team, trending, opp, top=30) if worth(r)]
             if not rows:
                 break
             r = rows[0]
@@ -214,6 +239,8 @@ def move_plan(m, me, trending, opp, max_moves=4):
                 why.append(f"your {hole} slot scores nothing this week without him")
             if r["d_wk"] >= 0.5:
                 why.append(f"+{r['d_wk']} pts this week")
+            if abs(r["po_gain"]) >= 0.3 and not (m.stream and r["pos"] in ("K", "DEF")):
+                why.append(f"{r['po_gain']:+.1f} a week in the playoff weeks")
             if r["d_ros"] >= 0.5 and not (m.stream and r["pos"] in ("K", "DEF")):
                 why.append(f"+{r['d_ros']} pts over the rest of the season")
             if r.get("block"):
