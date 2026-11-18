@@ -238,7 +238,7 @@ def league(L, i):
     spare = ""
     if L.get("spare_qbs"):
         spare = (f'<div class="m">Roster spot to reclaim: {e(" and ".join(L["spare_qbs"]))} is a spare quarterback '
-                 f'({"you carry " + str(L["qb_count"]) if L["qb_count"] > 2 else "your starter has no bye left"}). First in line to drop when you need the room.</div>')
+                 f'({"you carry " + str(L["qb_count"]) if L["qb_count"] > 2 else "your starter has no bye left"}). A candidate to drop when you need the room.</div>')
     if steps:
         h.append('<section><h2>Moves to make</h2><div class="sub">Put these claims in, in this order. Each one already accounts for the moves above it, and is judged on this week, the rest of the season and the playoff weeks. Bench depth is counted as injury cover, so the drop is the player you can best afford to lose.</div>'
                  f'<ol class="steps">{"".join(steps)}</ol>{spare}</section>')
