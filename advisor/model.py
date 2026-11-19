@@ -163,6 +163,7 @@ class Model:
             self.hold.update(ranked[:n or 0])
         self.max_qbs = cfg.get("max_qbs")
         self.playoff_odds = 0.0  # set after the season simulation
+        self.cfg, self.team_odds = cfg, {}
         self.week_w = {w: 1.0 for w in self.weeks}  # playoff weighting, set after the season simulation
 
         # chance of a dud (score at or below a threshold) this week, for leagues that punish it
@@ -265,10 +266,23 @@ class Model:
             out.append((slot, picks[i], pts.get(picks[i], 0) if picks[i] else 0))
         return out, total
 
-    def team_value(self, pids, floor_from=None):
-        """Sum of optimal-lineup points over the remaining weeks."""
+    def team_value(self, pids, floor_from=None, weights=None):
+        """Sum of optimal-lineup points over the remaining weeks (week weights default to your own)."""
         f = self.week if floor_from is None else floor_from
-        return sum(self.week_w[w] * self.lineup(pids, w, floor=w >= f)[1] for w in self.weeks)
+        wt = weights or self.week_w
+        return sum(wt[w] * self.lineup(pids, w, floor=w >= f)[1] for w in self.weeks)
+
+    def weights_for(self, odds, cfg=None):
+        """How another team should weigh the remaining weeks, given its own playoff odds."""
+        cfg = cfg or {}
+        locked = odds >= cfg.get("locked_in_odds", 2)
+        out = {}
+        for w in self.weeks:
+            if w >= self.lg["playoff_start"]:
+                out[w] = 0.5 + 1.5 * odds
+            else:
+                out[w] = cfg.get("locked_in_regular_weight", 1.0) if locked and w > self.week else 1.0
+        return out
 
     def active(self, team):
         return [p for p in team["players"] if p not in team["reserve"]]

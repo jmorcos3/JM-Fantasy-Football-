@@ -76,6 +76,7 @@ def main():
         season_sim = sim.run(m, cfg)
         p_playoffs = season_sim["odds"].get(lg["my_team"], 0)
         m.playoff_odds = p_playoffs
+        m.team_odds = season_sim["odds"]
         if cfg.get("playoff_weighting"):
             locked = p_playoffs >= cfg.get("locked_in_odds", 2)
             for w in m.weeks:  # playoff weeks count for more the likelier you are to be playing in them

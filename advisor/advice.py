@@ -303,7 +303,8 @@ def trades(m, me, needs=(), top=8, skip=()):
         if t["id"] == me["id"] or t["id"] in skip:
             continue
         theirs = m.active(t)
-        t_base = m.team_value(theirs)
+        t_w = m.weights_for(m.team_odds.get(t["id"], 0.5), m.cfg)  # they value weeks by their own situation
+        t_base = m.team_value(theirs, weights=t_w)
         t_assets = [p for p in theirs if m.pos(p) in SKILL and m.value(p) > 0 and p not in m.unprojected]
         t_cut = min((p for p in theirs if m.pos(p) in SKILL), key=m.value, default=None)
         found = []
@@ -320,7 +321,7 @@ def trades(m, me, needs=(), top=8, skip=()):
                 if len(give) == 2:
                     my_new = max(([*my_new, f] for f in best_fa), key=m.team_value, default=my_new)
                     t_new = [p for p in t_new if p != t_cut]
-                my_gain, t_gain = m.team_value(my_new) - my_base, m.team_value(t_new) - t_base
+                my_gain, t_gain = m.team_value(my_new) - my_base, m.team_value(t_new, weights=t_w) - t_base
                 nd = need.get(m.pos(get), {})
                 wire = max(nd.get("fa_gain", 0), 0)  # what a free pickup at that position already gets you
                 edge = my_gain - wire
