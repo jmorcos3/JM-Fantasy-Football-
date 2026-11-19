@@ -46,5 +46,7 @@
   "stream_k_def": {
     "hold_top_n": 3
   },
-  "max_qbs": 2
+  "max_qbs": 2,
+  "locked_in_odds": 0.9,
+  "locked_in_regular_weight": 0.6
 }

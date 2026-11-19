@@ -77,9 +77,13 @@ def main():
         p_playoffs = season_sim["odds"].get(lg["my_team"], 0)
         m.playoff_odds = p_playoffs
         if cfg.get("playoff_weighting"):
+            locked = p_playoffs >= cfg.get("locked_in_odds", 2)
             for w in m.weeks:  # playoff weeks count for more the likelier you are to be playing in them
                 if w >= lg["playoff_start"]:
                     m.week_w[w] = 0.5 + 1.5 * p_playoffs
+                elif locked and w > week:
+                    # all but in: the rest of the regular season only moves your seed
+                    m.week_w[w] = cfg.get("locked_in_regular_weight", 1.0)
         res = advice.build(m, trending, starters, season_sim)
         out["leagues"].append(res)
         print(f"  {lg['name']}: {len(res.get('waivers', []))} waiver ideas, {len(res.get('trades', []))} trade ideas, "

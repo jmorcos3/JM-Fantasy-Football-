@@ -44,6 +44,7 @@ page of decisions: optimal lineup, waiver targets with FAAB bids, trade offers, 
 
 - **Playoff odds**: 4,000 simulations of the remaining schedule using each team's weekly optimal-lineup projection.
 - **Playoff weighting**: playoff weeks count 0.5x to 2.0x in waiver and trade values, scaled by your odds of being there.
+  Once you are 90%+ to qualify (`locked_in_odds`), the remaining regular-season weeks after this one drop to 0.6x, since they only move your seed.
 - **Role growth**: snap share and touches + targets, last two games versus the two before; also nudges future projections up to 10%.
 - **Moves weigh three horizons**: this week, rest of season, and the playoff weeks. A team likely to make the playoffs will not
   give up playoff-week strength for a small bump today, and bench depth is credited as injury cover when choosing who to drop.
