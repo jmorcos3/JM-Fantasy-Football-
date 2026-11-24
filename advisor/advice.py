@@ -297,7 +297,8 @@ def trades(m, me, needs=(), top=8, skip=()):
     keep = {n.lower() for n in m.lg["rules"].get("untouchable", [])}  # players you will not trade
     my_assets = [p for p in mine if m.pos(p) in SKILL and m.value(p) > 0 and p not in m.unprojected
                  and m.name(p).lower() not in keep]
-    best_fa = sorted((p for p in m.free if m.pos(p) in SKILL), key=lambda p: -m.value(p))[:3]
+    # the free agent who fills an opened roster spot must be someone with a real projection
+    best_fa = sorted((p for p in m.free if m.pos(p) in SKILL and p not in m.unprojected), key=lambda p: -m.value(p))[:3]
     ideas = []
     for t in m.lg["teams"]:
         if t["id"] == me["id"] or t["id"] in skip:

@@ -144,8 +144,10 @@ class Model:
         self.unprojected = {pid for pid, n in self.recent_gp.items() if n >= 2 and pid not in projected
                             and self.recent[pid] >= 6 and (self.players.get(pid) or {}).get("team")}
         for pid in self.unprojected:
+            # on injured reserve with no return date: a much deeper discount than a short-term absence
+            carry = 0.35 if hurt.get(pid) in ("IR", "PUP", "NFI") else 0.7
             for w in self.weeks[1:]:
-                self.proj[w][pid] = 0.7 * self.recent[pid]
+                self.proj[w][pid] = carry * self.xrecent.get(pid, self.recent[pid])
 
         self.ros, self.games = {}, {}
         for w in self.weeks:
